@@ -1,16 +1,14 @@
-# Zeal
+package main
 
-A type-safe REST API framework for Go!
+import (
+	"fmt"
+	"net/http"
+	"reflect"
 
-Inspired by FastAPI, types are used to define and validate path parameters, request bodies and responses.
+	"github.com/DandyCodes/zeal"
+	"github.com/DandyCodes/zeal/example/models"
+)
 
-Automatically generates OpenAPI 3 schema documentation and serves it using Swagger.
-
-It builds upon *chi* (github.com/go-chi/chi) for routing and *rest* (github.com/a-h/rest) for generating the OpenAPI spec.
-
----
-
-```go
 var foodMenu = models.Menu{
 	ID:    1,
 	Items: []models.Item{{Name: "Steak", Price: 13.95}, {Name: "Potatoes", Price: 3.95}},
@@ -170,4 +168,3 @@ func handleDeleteItemParams(w zeal.Writer[any], r *zeal.Rqw[DeleteItemParams, an
 
 	w.WriteHeader(http.StatusNotFound)
 }
-```
