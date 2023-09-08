@@ -51,7 +51,6 @@ func addRoutes(rt *zeal.Router) {
 	// This route responds with a slice of menus - []models.Menu
 	// The response type is passed to the writer - zeal.Writer[[]models.Menu]
 	zeal.Get(rt, "/menus", func(w zeal.Writer[[]models.Menu], r *zeal.Rqr[any]) {
-		menus := menus
 		w.JSON(http.StatusOK, menus)
 	})
 
@@ -60,28 +59,28 @@ func addRoutes(rt *zeal.Router) {
 	// Parameters are automatically validated and converted to their declared type
 	// If validation fails, zeal responds with http.StatusUnprocessableEntity 422
 	type GetPrintParams struct {
-		StringP  string
-		IntP     uint8
-		BoolQ    bool
-		Float32Q float32
+		SP   string
+		IP   int
+		BQ   bool
+		F32Q float32
 	}
 	// The parameters type is passed to the request - *zeal.Rqr[GetPrintParams]
-	// Since this route has no response type, no type (any) is passed to the writer - zeal.Writer[any]
-	zeal.Get(rt, "/print/{IntP}/{StringP}", func(w zeal.Writer[any], r *zeal.Rqr[GetPrintParams]) {
-		// IntP and StringP are path params because they appear in the URL path "/print/{IntP}/{StringP}"
-		// BoolQ and Float32Q are, therefore, automatically query params
-		// Both types of URL parameters are found in the Params field of the request
+	// This route has no response type so any is passed to the writer - zeal.Writer[any]
+	zeal.Get(rt, "/print/{IP}/{SP}", func(w zeal.Writer[any], r *zeal.Rqr[GetPrintParams]) {
+		// IP and SP are path params because they appear in the URL path "/print/{IP}/{SP}"
+		// BQ and F32Q are, therefore, automatically query params
+		// Both kinds of validated params are found in the Params field of the request
 
-		aStringPathParameter := r.Params.StringP
+		aStringPathParameter := r.Params.SP
 		fmt.Println(aStringPathParameter, reflect.TypeOf(aStringPathParameter)) // string type
 
-		anIntPathParameter := r.Params.IntP
+		anIntPathParameter := r.Params.IP
 		fmt.Println(anIntPathParameter, reflect.TypeOf(anIntPathParameter)) // int type
 
-		aBooleanQueryParameter := r.Params.BoolQ
+		aBooleanQueryParameter := r.Params.BQ
 		fmt.Println(aBooleanQueryParameter, reflect.TypeOf(aBooleanQueryParameter)) // bool type
 
-		aFloat32QueryParameter := r.Params.Float32Q
+		aFloat32QueryParameter := r.Params.F32Q
 		fmt.Println(aFloat32QueryParameter, reflect.TypeOf(aFloat32QueryParameter)) // float32 type
 
 		// If a query param and path param sharing the same name are sent in a single request,
@@ -106,11 +105,14 @@ func addRoutes(rt *zeal.Router) {
 
 	// Read requests such as GET can contain parameters but never a request body
 	// Write requests such as POST can contain both parameters and a request body
-	type PostItemParams struct {
+	type Menu struct {
 		MenuID int
 	}
-	// Params and body types are passed to the write request - *zeal.Rqw[PostItemParams, models.Item]
-	zeal.Post(rt, "/items", func(w zeal.Writer[models.Item], r *zeal.Rqw[PostItemParams, models.Item]) {
+	// Params and body types are passed to the write request - *zeal.Rqw[Menu, models.Item]
+	// Request bodies are automatically validated
+	// If validation fails, zeal responds with http.StatusUnprocessableEntity 422
+	zeal.Post(rt, "/items", func(w zeal.Writer[models.Item], r *zeal.Rqw[Menu, models.Item]) {
+		// The validated body is found in the Body field of the request
 		newItem := r.Body
 		if newItem.Price < 10 {
 			w.WriteHeader(http.StatusBadRequest)
@@ -132,8 +134,8 @@ func addRoutes(rt *zeal.Router) {
 
 	// PUT is also a write request
 	zeal.Put(rt, "/items", func(w zeal.Writer[models.Item], r *zeal.Rqw[any, models.Item]) {
+		updatedItem := r.Body
 		for _, menu := range menus {
-			updatedItem := r.Body
 			for _, item := range menu.Items {
 				if item.Name == updatedItem.Name {
 					item.Price = updatedItem.Price
@@ -148,14 +150,14 @@ func addRoutes(rt *zeal.Router) {
 
 	// DELETE is also a write request
 	// Params type and handler function declared in outer scope
-	zeal.Delete(rt, "/items", handleDeleteItemParams)
+	zeal.Delete(rt, "/items", handleDeleteItem)
 }
 
 type DeleteItemParams struct {
 	ItemName string
 }
 
-func handleDeleteItemParams(w zeal.Writer[any], r *zeal.Rqw[DeleteItemParams, any]) {
+func handleDeleteItem(w zeal.Writer[any], r *zeal.Rqw[DeleteItemParams, any]) {
 	for _, menu := range menus {
 		for i, item := range menu.Items {
 			if item.Name == r.Params.ItemName {
