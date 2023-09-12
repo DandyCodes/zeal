@@ -47,13 +47,14 @@ func addRoutes(rt *zeal.Router) {
   // the response type (int) is passed to the writer - zeal.Writer[int]
   zeal.Get(rt, "/the_answer", func(w zeal.Writer[int], r *zeal.Rqr[any]) {
     // This JSON convenience method will only accept data of the declared response type
-    w.JSON(http.StatusOK, 42)
+    w.JSON(42, http.StatusOK)
   })
 
   // This route responds with a slice of menus - []models.Menu
   // The response type is passed to the writer - zeal.Writer[[]models.Menu]
   zeal.Get(rt, "/menus", func(w zeal.Writer[[]models.Menu], r *zeal.Rqr[any]) {
-    w.JSON(http.StatusOK, menus)
+    // http status is optional and can be omitted (will send http.StatusOK 200 by default)
+    w.JSON(menus)
   })
 
   // Struct type definition representing both path and query URL parameters
@@ -97,7 +98,7 @@ func addRoutes(rt *zeal.Router) {
   zeal.Get(rt, "/menu/{MenuID}", func(w zeal.Writer[models.Menu], r *zeal.Rqr[GetMenuParams]) {
     for _, menu := range menus {
       if menu.ID == r.Params.MenuID {
-        w.JSON(http.StatusOK, menu)
+        w.JSON(menu)
         return
       }
     }
@@ -127,7 +128,7 @@ func addRoutes(rt *zeal.Router) {
       }
 
       menu.Items = append(menu.Items, newItem)
-      w.JSON(http.StatusCreated, newItem)
+      w.JSON(newItem, http.StatusCreated)
       return
     }
 
@@ -141,7 +142,7 @@ func addRoutes(rt *zeal.Router) {
       for _, item := range menu.Items {
         if item.Name == updatedItem.Name {
           item.Price = updatedItem.Price
-          w.JSON(http.StatusOK, item)
+          w.JSON(item)
           return
         }
       }

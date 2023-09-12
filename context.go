@@ -9,9 +9,12 @@ type Writer[ResponseType any] struct {
 	http.ResponseWriter
 }
 
-func (w *Writer[ResponseType]) JSON(status int, data ResponseType) {
+func (w *Writer[ResponseType]) JSON(data ResponseType, statuses ...int) {
 	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(status)
+	if len(statuses) > 0 {
+		status := statuses[0]
+		w.WriteHeader(status)
+	}
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
