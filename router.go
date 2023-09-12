@@ -29,6 +29,36 @@ func (r *Router) CreateSpec(version string, description string) *openapi3.T {
 	spec.Info.Version = version
 	spec.Info.Description = description
 
+	for _, schemaRef := range spec.Components.Schemas {
+		for propertyName := range schemaRef.Value.Properties {
+			schemaRef.Value.Required = append(schemaRef.Value.Required, propertyName)
+		}
+	}
+
+	for _, path := range spec.Paths {
+
+		if path.Get != nil {
+			if path.Get.Responses != nil {
+				delete(path.Get.Responses, "default")
+			}
+		}
+		if path.Post != nil {
+			if path.Post.Responses != nil {
+				delete(path.Post.Responses, "default")
+			}
+		}
+		if path.Put != nil {
+			if path.Put.Responses != nil {
+				delete(path.Put.Responses, "default")
+			}
+		}
+		if path.Delete != nil {
+			if path.Delete.Responses != nil {
+				delete(path.Delete.Responses, "default")
+			}
+		}
+	}
+
 	for _, queryParam := range queryParams {
 		var schema *openapi3.Schema
 		switch queryParam.primitiveSchemaType {

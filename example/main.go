@@ -92,7 +92,7 @@ func addRoutes(rt *zeal.Router) {
 		MenuID int
 	}
 	// Response type passed to the writer - zeal.Writer[models.Menu]
-	zeal.Get(rt, "/menus/{MenuID}", func(w zeal.Writer[models.Menu], r *zeal.Rqr[GetMenuParams]) {
+	zeal.Get(rt, "/menu/{MenuID}", func(w zeal.Writer[models.Menu], r *zeal.Rqr[GetMenuParams]) {
 		for _, menu := range menus {
 			if menu.ID == r.Params.MenuID {
 				w.JSON(http.StatusOK, menu)
@@ -111,7 +111,7 @@ func addRoutes(rt *zeal.Router) {
 	// Params and body types are passed to the write request - *zeal.Rqw[Menu, models.Item]
 	// Request bodies are automatically validated
 	// If validation fails, zeal responds with http.StatusUnprocessableEntity 422
-	zeal.Post(rt, "/items", func(w zeal.Writer[models.Item], r *zeal.Rqw[Menu, models.Item]) {
+	zeal.Post(rt, "/item", func(w zeal.Writer[models.Item], r *zeal.Rqw[Menu, models.Item]) {
 		// The validated body is found in the Body field of the request
 		newItem := r.Body
 		if newItem.Price < 10 {
@@ -133,7 +133,7 @@ func addRoutes(rt *zeal.Router) {
 	})
 
 	// PUT is also a write request
-	zeal.Put(rt, "/items", func(w zeal.Writer[models.Item], r *zeal.Rqw[any, models.Item]) {
+	zeal.Put(rt, "/item", func(w zeal.Writer[models.Item], r *zeal.Rqw[any, models.Item]) {
 		updatedItem := r.Body
 		for _, menu := range menus {
 			for _, item := range menu.Items {
@@ -150,7 +150,7 @@ func addRoutes(rt *zeal.Router) {
 
 	// DELETE is also a write request
 	// Params type and handler function declared in outer scope
-	zeal.Delete(rt, "/items", handleDeleteItem)
+	zeal.Delete(rt, "/item", handleDeleteItem)
 }
 
 type DeleteItemParams struct {
