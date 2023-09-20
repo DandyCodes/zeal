@@ -47,15 +47,6 @@ func isPathParam(s string, path map[string]rest.PathParam) bool {
 	return false
 }
 
-type QueryParam struct {
-	pattern             string
-	name                string
-	primitiveSchemaType string
-	method              rest.Method
-}
-
-var queryParams = []QueryParam{}
-
 func registerParameters(route *rest.Route, pattern string, paramsType reflect.Type) {
 	params, err := getParamsFromPattern(pattern)
 	if err != nil {
@@ -72,15 +63,7 @@ func registerParameters(route *rest.Route, pattern string, paramsType reflect.Ty
 			if isPathParam(field.Name, params.Path) {
 				route.HasPathParameter(field.Name, rest.PathParam{Type: primitiveSchemaType})
 			} else {
-				queryParams = append(
-					queryParams,
-					QueryParam{
-						pattern:             pattern,
-						name:                field.Name,
-						primitiveSchemaType: primitiveSchemaType,
-						method:              route.Method,
-					},
-				)
+				route.HasQueryParameter(field.Name, rest.QueryParam{Type: primitiveSchemaType, Required: true})
 			}
 		}
 	}
@@ -139,18 +122,18 @@ func getPlaceholder(s string) (name string, pattern string, ok bool) {
 	return name, pattern, true
 }
 
-func getPrimitiveSchemaType(kind reflect.Kind) string {
+func getPrimitiveSchemaType(kind reflect.Kind) rest.PrimitiveType {
 	switch kind {
 	case reflect.Bool:
-		return "boolean"
+		return rest.PrimitiveTypeBool
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return "integer"
+		return rest.PrimitiveTypeInteger
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return "integer"
+		return rest.PrimitiveTypeInteger
 	case reflect.Float32, reflect.Float64:
-		return "number"
+		return rest.PrimitiveTypeFloat64
 	case reflect.String:
-		return "string"
+		return rest.PrimitiveTypeString
 	default:
 		return ""
 	}

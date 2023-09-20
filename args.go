@@ -132,6 +132,8 @@ func isFloat32InRange(val float64) bool {
 
 func isIntInRange(val int64, kind reflect.Kind) bool {
 	switch kind {
+	case reflect.Int:
+		return val >= math.MinInt && val <= math.MaxInt
 	case reflect.Int8:
 		return val >= math.MinInt8 && val <= math.MaxInt8
 	case reflect.Int16:
@@ -147,6 +149,8 @@ func isIntInRange(val int64, kind reflect.Kind) bool {
 
 func isUintInRange(val uint64, kind reflect.Kind) bool {
 	switch kind {
+	case reflect.Uint:
+		return val <= math.MaxUint
 	case reflect.Uint8:
 		return val <= math.MaxUint8
 	case reflect.Uint16:
