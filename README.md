@@ -122,12 +122,12 @@ func addRoutes(rt *zeal.Router) {
       return
     }
 
-    for _, menu := range menus {
-      if menu.ID != r.Params.MenuID {
+    for i := range menus {
+      if menus[i].ID != r.Params.MenuID {
         continue
       }
 
-      menu.Items = append(menu.Items, newItem)
+      menus[i].Items = append(menus[i].Items, newItem)
       w.JSON(newItem, http.StatusCreated)
       return
     }
@@ -138,11 +138,11 @@ func addRoutes(rt *zeal.Router) {
   // PUT is also a write request
   zeal.Put(rt, "/item", func(w zeal.Writer[models.Item], r *zeal.Rqw[any, models.Item]) {
     updatedItem := r.Body
-    for _, menu := range menus {
-      for _, item := range menu.Items {
-        if item.Name == updatedItem.Name {
-          item.Price = updatedItem.Price
-          w.JSON(item)
+    for i := range menus {
+      for j := range menus[i].Items {
+        if menus[i].Items[j].Name == updatedItem.Name {
+          menus[i].Items[j].Price = updatedItem.Price
+          w.JSON(menus[i].Items[j])
           return
         }
       }
@@ -161,10 +161,10 @@ type DeleteItemParams struct {
 }
 
 func handleDeleteItem(w zeal.Writer[any], r *zeal.Rqw[DeleteItemParams, any]) {
-  for _, menu := range menus {
-    for i, item := range menu.Items {
-      if item.Name == r.Params.ItemName {
-        menu.Items = append(menu.Items[:i], menu.Items[i+1:]...)
+  for i := range menus {
+    for j := range menus[i].Items {
+      if menus[i].Items[j].Name == r.Params.ItemName {
+        menus[i].Items = append(menus[i].Items[:i], menus[i].Items[i+1:]...)
         w.WriteHeader(http.StatusNoContent)
         return
       }
