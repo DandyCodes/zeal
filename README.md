@@ -2,7 +2,7 @@
 
 A type-safe REST API framework for Go!
 
-Inspired by [FastAPI](https://github.com/tiangolo/fastapi), types are used to define and validate path parameters, request bodies and responses.
+Inspired by [FastAPI](https://github.com/tiangolo/fastapi), types are used to define and validate URL parameters, request bodies and responses.
 
 Automatically generates OpenAPI 3 schema documentation and serves it using Swagger.
 
