@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
-
-	"github.com/go-chi/chi/v5"
 )
 
 func getParams[ParamsType any](r *http.Request) (ParamsType, error) {
@@ -42,7 +40,7 @@ func getParams[ParamsType any](r *http.Request) (ParamsType, error) {
 }
 
 func getParam(r *http.Request, name string, paramType reflect.Type) (any, error) {
-	param := chi.URLParam(r, name)
+	param := r.PathValue(name)
 	if param == "" {
 		param = r.URL.Query().Get(name)
 	}
@@ -51,17 +49,16 @@ func getParam(r *http.Request, name string, paramType reflect.Type) (any, error)
 
 func parseParam(param string, paramType reflect.Type) (interface{}, error) {
 	var parsed interface{}
-	var err error
 
 	switch paramType.Kind() {
 	case reflect.Float32, reflect.Float64:
 		val, err := strconv.ParseFloat(param, 64)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse number from: %v", param)
+			return nil, fmt.Errorf("failed to parse number from: %v", param)
 		}
 		if paramType.Kind() == reflect.Float32 {
 			if !isFloat32InRange(val) {
-				return nil, fmt.Errorf("Value out of range for float32: %v", val)
+				return nil, fmt.Errorf("value out of range for float32: %v", val)
 			}
 			parsed = float32(val)
 		} else {
@@ -70,10 +67,10 @@ func parseParam(param string, paramType reflect.Type) (interface{}, error) {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		val, err := strconv.ParseInt(param, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse integer from: %v", param)
+			return nil, fmt.Errorf("failed to parse integer from: %v", param)
 		}
 		if !isIntInRange(val, paramType.Kind()) {
-			return nil, fmt.Errorf("Value out of range for %v: %d", paramType.Kind(), val)
+			return nil, fmt.Errorf("value out of range for %v: %d", paramType.Kind(), val)
 		}
 		switch paramType.Kind() {
 		case reflect.Int:
@@ -90,10 +87,10 @@ func parseParam(param string, paramType reflect.Type) (interface{}, error) {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		val, err := strconv.ParseUint(param, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse unsigned integer from: %v", param)
+			return nil, fmt.Errorf("failed to parse unsigned integer from: %v", param)
 		}
 		if !isUintInRange(val, paramType.Kind()) {
-			return nil, fmt.Errorf("Value out of range for %v: %d", paramType.Kind(), val)
+			return nil, fmt.Errorf("value out of range for %v: %d", paramType.Kind(), val)
 		}
 		switch paramType.Kind() {
 		case reflect.Uint:
@@ -110,17 +107,13 @@ func parseParam(param string, paramType reflect.Type) (interface{}, error) {
 	case reflect.Bool:
 		val, err := strconv.ParseBool(param)
 		if err != nil {
-			return nil, fmt.Errorf("Failed to parse boolean from: %v", param)
+			return nil, fmt.Errorf("failed to parse boolean from: %v", param)
 		}
 		parsed = val
 	case reflect.String:
 		parsed = param
 	default:
-		return nil, fmt.Errorf("Unsupported type: %v", paramType.Kind())
-	}
-
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unsupported type: %v", paramType.Kind())
 	}
 
 	return parsed, nil

@@ -3,78 +3,89 @@ package zeal
 import (
 	"fmt"
 	"net/http"
+	"strings"
+
+	"github.com/a-h/rest"
 )
 
-type HandlerFuncRead[ResponseType, ParamsType any] func(Writer[ResponseType], *Rqr[ParamsType])
-type HandlerFuncWrite[ResponseType, ParamsType, BodyType any] func(Writer[ResponseType], *Rqw[ParamsType, BodyType])
+type ReadHandler[ResponseType, ParamsType any] func(ResponseWriter[ResponseType], *Request[ParamsType])
 
-func Get[ResponseType, ParamsType any](router *Router, pattern string, handlerFunc HandlerFuncRead[ResponseType, ParamsType]) {
+func Read[ResponseType, ParamsType any](router *Router, pattern string, handler ReadHandler[ResponseType, ParamsType]) {
 	routeSchema := getRouteSchema[ResponseType, ParamsType, any](pattern)
-	route := router.Api.Get(pattern)
-	registerParameters(route, routeSchema.pattern, routeSchema.paramsType)
-	registerRequestModel(route, routeSchema.bodyType)
-	registerResponseModel(route, routeSchema.responseType)
-	router.Mux.Get(pattern, unwrapHandlerFuncRead(handlerFunc))
+	registerRoute(pattern, router, routeSchema)
+	router.HandleFunc(pattern, unwrapReadHandler(handler))
 }
 
-func Post[ResponseType, ParamsType, BodyType any](router *Router, pattern string, handlerFunc HandlerFuncWrite[ResponseType, ParamsType, BodyType]) {
-	routeSchema := getRouteSchema[ResponseType, ParamsType, BodyType](pattern)
-	route := router.Api.Post(pattern)
-	registerParameters(route, routeSchema.pattern, routeSchema.paramsType)
-	registerRequestModel(route, routeSchema.bodyType)
-	registerResponseModel(route, routeSchema.responseType)
-	router.Mux.Post(pattern, unwrapHandlerFuncWrite(handlerFunc))
-}
-
-func Put[ResponseType, ParamsType, BodyType any](router *Router, pattern string, handlerFunc HandlerFuncWrite[ResponseType, ParamsType, BodyType]) {
-	routeSchema := getRouteSchema[ResponseType, ParamsType, BodyType](pattern)
-	route := router.Api.Put(pattern)
-	registerParameters(route, routeSchema.pattern, routeSchema.paramsType)
-	registerRequestModel(route, routeSchema.bodyType)
-	registerResponseModel(route, routeSchema.responseType)
-	router.Mux.Put(pattern, unwrapHandlerFuncWrite(handlerFunc))
-}
-
-func Delete[ResponseType, ParamsType, BodyType any](router *Router, pattern string, handlerFunc HandlerFuncWrite[ResponseType, ParamsType, BodyType]) {
-	routeSchema := getRouteSchema[ResponseType, ParamsType, BodyType](pattern)
-	route := router.Api.Delete(pattern)
-	registerParameters(route, routeSchema.pattern, routeSchema.paramsType)
-	registerRequestModel(route, routeSchema.bodyType)
-	registerResponseModel(route, routeSchema.responseType)
-	router.Mux.Delete(pattern, unwrapHandlerFuncWrite(handlerFunc))
-}
-
-func unwrapHandlerFuncRead[ResponseType, ParamsType any](handlerFunc HandlerFuncRead[ResponseType, ParamsType]) http.HandlerFunc {
+func unwrapReadHandler[T_Response, T_Params any](handler func(ResponseWriter[T_Response], *Request[T_Params])) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		params, err := getParams[ParamsType](r)
+		params, err := getParams[T_Params](r)
 		if err != nil {
 			fmt.Println(err)
 			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
 		}
-
-		rqr := Rqr[ParamsType]{Request: r, Params: params}
-		handlerFunc(Writer[ResponseType]{w}, &rqr)
+		request := Request[T_Params]{Request: r, Params: params}
+		handler(ResponseWriter[T_Response]{w}, &request)
 	}
 }
 
-func unwrapHandlerFuncWrite[ResponseType, ParamsType, BodyType any](handlerFunc HandlerFuncWrite[ResponseType, ParamsType, BodyType]) http.HandlerFunc {
+type WriteHandler[ResponseType, ParamsType, BodyType any] func(ResponseWriter[ResponseType], *Request[ParamsType], BodyType)
+
+func Write[ResponseType, ParamsType, BodyType any](router *Router, pattern string, handler WriteHandler[ResponseType, ParamsType, BodyType]) {
+	routeSchema := getRouteSchema[ResponseType, ParamsType, BodyType](pattern)
+	registerRoute(pattern, router, routeSchema)
+	router.HandleFunc(pattern, unwrapWriteHandler(handler))
+}
+
+func unwrapWriteHandler[T_Response, T_Params, T_Body any](handler func(ResponseWriter[T_Response], *Request[T_Params], T_Body)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		params, err := getParams[ParamsType](r)
+		params, err := getParams[T_Params](r)
 		if err != nil {
 			fmt.Println(err)
 			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
 		}
 
-		body, ok := getBody[BodyType](r)
+		body, ok := getBody[T_Body](r)
 		if !ok {
 			fmt.Println(err)
 			w.WriteHeader(http.StatusUnprocessableEntity)
 			return
 		}
 
-		rqw := Rqw[ParamsType, BodyType]{Rqr: Rqr[ParamsType]{Request: r, Params: params}, Body: body}
-		handlerFunc(Writer[ResponseType]{w}, &rqw)
+		request := Request[T_Params]{Request: r, Params: params}
+		handler(ResponseWriter[T_Response]{w}, &request, body)
+	}
+}
+
+const (
+	getPrefix    = "GET "
+	postPrefix   = "POST "
+	putPrefix    = "PUT "
+	deletePrefix = "DELETE "
+)
+
+func registerRoute(pattern string, router *Router, routeSchema RouteSchema) {
+	var route *rest.Route
+
+	switch {
+	case strings.HasPrefix(pattern, getPrefix):
+		path := strings.TrimPrefix(pattern, getPrefix)
+		route = router.Api.Get(path)
+	case strings.HasPrefix(pattern, postPrefix):
+		path := strings.TrimPrefix(pattern, postPrefix)
+		route = router.Api.Post(path)
+	case strings.HasPrefix(pattern, putPrefix):
+		path := strings.TrimPrefix(pattern, putPrefix)
+		route = router.Api.Put(path)
+	case strings.HasPrefix(pattern, deletePrefix):
+		path := strings.TrimPrefix(pattern, deletePrefix)
+		route = router.Api.Delete(path)
+	}
+
+	if route != nil {
+		registerParameters(route, routeSchema.pattern, routeSchema.paramsType)
+		registerRequestModel(route, routeSchema.bodyType)
+		registerResponseModel(route, routeSchema.responseType)
 	}
 }
