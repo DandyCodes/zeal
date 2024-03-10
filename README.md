@@ -10,47 +10,39 @@ Automatically generates OpenAPI 3 schema documentation using [REST](https://gith
 
 ```go
 func main() {
-    router := zeal.NewRouter("API")
+    r := zeal.NewRouter("API")
 
-    addRoutes(router)
+    addRoutes(r)
 
-    router.Api.StripPkgPaths = []string{"main", "models", "github.com/DandyCodes/zeal"}
-    spec := router.CreateSpec("v1.0.0", "Spec")
-    router.ServeSwaggerUI(spec, "GET /swagger-ui/")
+    r.Api.StripPkgPaths = []string{"main", "models", "github.com/DandyCodes/zeal"}
+    spec := r.CreateSpec("v1.0.0", "Spec")
+    r.ServeSwaggerUI(spec, "GET /swagger-ui/")
 
     fmt.Println("Listening on port 3000...")
     fmt.Println("Visit http://localhost:3000/swagger-ui to see API definitions")
-    http.ListenAndServe(":3000", router)
-}
-```
-
-Routes are documented in the OpenAPI spec
-
-```go
-func addRoutes(router *zeal.Router) {
-    zeal.Route(router, "GET /",
-       func(w zeal.ResponseWriter[any], r *zeal.Request[any]) {
-          w.BodyRoute([]byte("Hello, world!"))
-    })
+    http.ListenAndServe(":3000", r)
 }
 ```
 
 ---
 
-This route responds with an integer - zeal.ResponseWriter[int]
-
 ```go
-zeal.Route(router, "GET /the_answer",
-    func(w zeal.ResponseWriter[int], r *zeal.Request[any]) {
-       w.JSON(42)
-    })
+zeal.Ping(r, "POST /", func(c zeal.Ctx[any]) {
+    fmt.Println("Hello, world!")
+})
 ```
 
-This JSON convenience method will only accept data of the declared response type
+**Ping** doesn't return a response body but **Pull** does
+
+```go
+zeal.Pull(r, "GET /", func(c zeal.Ctx[any]) int {
+    return 42
+})
+```
 
 ---
 
-Example API
+Example data
 
 ```go
 var foodMenu = models.Menu{
@@ -66,115 +58,102 @@ var drinksMenu = models.Menu{
 var menus = []models.Menu{foodMenu, drinksMenu}
 ```
 
-Struct with fields representing both path and query URL parameters - must be capitalized
+Struct representing URL parameters - fields must be capitalized (i.e. 'MenuID')
 
 ```go
 type GetMenu struct {
-    MenuID int  // path param
-    Quiet  bool // query param
+    MenuID int
 }
-zeal.Route(router, "GET /menu/{MenuID}",
-    func(w zeal.ResponseWriter[models.Menu], r *zeal.Request[GetMenu]) {
-        for _, menu := range menus {
-            if menu.ID == r.Params.MenuID {
-                w.JSON(menu, http.StatusOK) // status optional - OK 200 sent by default
-                if !r.Params.Quiet {
-                    fmt.Println("Found menu: ", menu)
-                    fmt.Println("Returning early")
-                }
+zeal.Pull(r, "GET /menu/{MenuID}", func(c zeal.Ctx[GetMenu]) models.Menu {
+    for _, menu := range menus {
+        if menu.ID == c.Param.MenuID {
+            return menu
+        }
+    }
+    return zeal.Error[models.Menu](c, http.StatusNotFound)
+})
+```
+
+Returning an **Error** ends the request with empty data of the correct type
+
+Params can be query or path params
+
+Params struct can be defined in-line
+
+```go
+zeal.Ping(r, "DELETE /item", func(c zeal.Ctx[struct{ Name string }]) {
+    for i := range menus {
+        for j := range menus[i].Items {
+            if menus[i].Items[j].Name == c.Param.Name {
+                menus[i].Items = append(menus[i].Items[:i], menus[i].Items[i+1:]...)
+                c.W.WriteHeader(http.StatusNoContent)
                 return
             }
         }
+    }
 
-        if !r.Params.Quiet {
-            fmt.Println("Menu not found")
-        }
-        w.WriteHeader(http.StatusNotFound)
-    })
+    c.W.WriteHeader(http.StatusNotFound)
+})
 ```
 
 Params are converted to their declared type
 
 If this fails, http.StatusUnprocessableEntity 422 is sent immediately
 
----
-
-This route has a request body
+**Push** takes a request body
 
 ```go
-type PostItem struct {
-    MenuID int
-}
-zeal.BodyRoute(router, "POST /item",
-    func(w zeal.ResponseWriter[models.Item], r *zeal.Request[PostItem], body models.Item) {
-        newItem := body
-        if newItem.Price < 10 {
-            w.WriteHeader(http.StatusBadRequest)
-            return
+zeal.Push(r, "POST /item", func(c zeal.Ctx[struct{ MenuID int }], body models.Item) {
+    newItem := body
+    if newItem.Price < 0 {
+        c.W.WriteHeader(http.StatusBadRequest)
+        return
+    }
+
+    for i := range menus {
+        if menus[i].ID != c.Param.MenuID {
+            continue
         }
+        menus[i].Items = append(menus[i].Items, newItem)
+        c.W.WriteHeader(http.StatusCreated)
+        return
+    }
 
-        for i := range menus {
-            if menus[i].ID != r.Params.MenuID {
-                continue
-            }
-
-            menus[i].Items = append(menus[i].Items, newItem)
-            w.JSON(newItem, http.StatusCreated)
-            return
-        }
-
-        w.WriteHeader(http.StatusNotFound)
-    })
+    c.W.WriteHeader(http.StatusNotFound)
+})
 ```
 
-The body is converted to its declared type
+Like params, the request body is converted to its declared type
 
 If this fails, http.StatusUnprocessableEntity 422 is sent immediately
 
----
-
-Put request with no params
+**Trade** takes a request body and returns a response body
 
 ```go
-zeal.BodyRoute(router, "PUT /item",
-    func(w zeal.ResponseWriter[models.Item], r *zeal.Request[any], b models.Item) {
-        updatedItem := b
-        for i := range menus {
-            for j := range menus[i].Items {
-                if menus[i].Items[j].Name == updatedItem.Name {
-                    menus[i].Items[j].Price = updatedItem.Price
-                    w.JSON(menus[i].Items[j])
-                    return
-                }
-            }
-        }
+zeal.Trade(r, "PUT /item", handleUpsertItem)
 
-        w.WriteHeader(http.StatusNotFound)
-    })
-```
+func handleUpsertItem(c zeal.Ctx[struct{ Quiet bool }], updateItem models.Item) models.Item {
+    if updateItem.Price < 0 {
+        return zeal.Error[models.Item](c, http.StatusBadRequest)
+    }
 
----
-
-Delete request with handler function declared in outer scope
-
-```go
-zeal.Route(router, "DELETE /item", handleDeleteItem)
-
-type DeleteItem struct {
-    Name string
-}
-
-func handleDeleteItem(w zeal.ResponseWriter[any], r *zeal.Request[DeleteItem]) {
     for i := range menus {
         for j := range menus[i].Items {
-            if menus[i].Items[j].Name == r.Params.Name {
-                menus[i].Items = append(menus[i].Items[:i], menus[i].Items[i+1:]...)
-                w.WriteHeader(http.StatusNoContent)
-                return
+            if menus[i].Items[j].Name == updateItem.Name {
+                if !c.Param.Quiet {
+                    fmt.Println("Updating item: ", updateItem)
+                }
+                menus[i].Items[j].Price = updateItem.Price
+                return updateItem
             }
         }
     }
 
-    w.WriteHeader(http.StatusNotFound)
+    if !c.Param.Quiet {
+        fmt.Println("Creating new item: ", updateItem)
+    }
+    menus[0].Items = append(menus[0].Items, updateItem)
+    c.W.WriteHeader(http.StatusCreated)
+    return updateItem
 }
 ```

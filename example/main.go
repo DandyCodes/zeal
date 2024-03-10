@@ -9,17 +9,17 @@ import (
 )
 
 func main() {
-	router := zeal.NewRouter("API")
+	r := zeal.NewRouter("API")
 
-	addRoutes(router)
+	addRoutes(r)
 
-	router.Api.StripPkgPaths = []string{"main", "models", "github.com/DandyCodes/zeal"}
-	spec := router.CreateSpec("v1.0.0", "Spec")
-	router.ServeSwaggerUI(spec, "GET /swagger-ui/")
+	r.Api.StripPkgPaths = []string{"main", "models", "github.com/DandyCodes/zeal"}
+	spec := r.CreateSpec("v1.0.0", "Spec")
+	r.ServeSwaggerUI(spec, "GET /swagger-ui/")
 
 	fmt.Println("Listening on port 3000...")
 	fmt.Println("Visit http://localhost:3000/swagger-ui to see API definitions")
-	http.ListenAndServe(":3000", router)
+	http.ListenAndServe(":3000", r)
 }
 
 var foodMenu = models.Menu{
@@ -34,97 +34,84 @@ var drinksMenu = models.Menu{
 
 var menus = []models.Menu{foodMenu, drinksMenu}
 
-func addRoutes(router *zeal.Router) {
-	zeal.Route(router, "GET /",
-		func(w zeal.ResponseWriter[any], r *zeal.Request[any]) {
-			w.Write([]byte("Hello, world!"))
-		})
+func addRoutes(r *zeal.Router) {
+	zeal.Ping(r, "POST /", func(c zeal.Ctx[any]) {
+		fmt.Println("Hello, world!")
+	})
 
-	zeal.Route(router, "GET /the_answer",
-		func(w zeal.ResponseWriter[int], r *zeal.Request[any]) {
-			w.JSON(42)
-		})
+	zeal.Pull(r, "GET /", func(c zeal.Ctx[any]) int {
+		return 42
+	})
 
 	type GetMenu struct {
 		MenuID int
-		Quiet  bool
 	}
-	zeal.Route(router, "GET /menu/{MenuID}",
-		func(w zeal.ResponseWriter[models.Menu], r *zeal.Request[GetMenu]) {
-			for _, menu := range menus {
-				if menu.ID == r.Params.MenuID {
-					w.JSON(menu, http.StatusOK)
-					if !r.Params.Quiet {
-						fmt.Println("Found menu: ", menu)
-						fmt.Println("Returning early")
-					}
+	zeal.Pull(r, "GET /menu/{MenuID}", func(c zeal.Ctx[GetMenu]) models.Menu {
+		for _, menu := range menus {
+			if menu.ID == c.Params.MenuID {
+				return menu
+			}
+		}
+		return zeal.Error[models.Menu](c, http.StatusNotFound)
+	})
+
+	zeal.Ping(r, "DELETE /item", func(c zeal.Ctx[struct{ Name string }]) {
+		for i := range menus {
+			for j := range menus[i].Items {
+				if menus[i].Items[j].Name == c.Params.Name {
+					menus[i].Items = append(menus[i].Items[:i], menus[i].Items[i+1:]...)
+					c.Status(http.StatusNoContent)
 					return
 				}
 			}
+		}
 
-			if !r.Params.Quiet {
-				fmt.Println("Menu not found")
+		c.Status(http.StatusNotFound)
+	})
+
+	zeal.Push(r, "POST /item", func(c zeal.Ctx[struct{ MenuID int }], body models.Item) {
+		newItem := body
+		if newItem.Price < 0 {
+			c.Status(http.StatusBadRequest)
+			return
+		}
+
+		for i := range menus {
+			if menus[i].ID != c.Params.MenuID {
+				continue
 			}
-			w.WriteHeader(http.StatusNotFound)
-		})
+			menus[i].Items = append(menus[i].Items, newItem)
+			c.Status(http.StatusCreated)
+			return
+		}
 
-	type PostItem struct {
-		MenuID int
+		c.Status(http.StatusNotFound)
+	})
+
+	zeal.Trade(r, "PUT /item", handleUpsertItem)
+}
+
+func handleUpsertItem(c zeal.Ctx[struct{ Quiet bool }], updateItem models.Item) models.Item {
+	if updateItem.Price < 0 {
+		return zeal.Error[models.Item](c, http.StatusBadRequest)
 	}
-	zeal.BodyRoute(router, "POST /item",
-		func(w zeal.ResponseWriter[models.Item], r *zeal.Request[PostItem], body models.Item) {
-			newItem := body
-			if newItem.Price < 10 {
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
 
-			for i := range menus {
-				if menus[i].ID != r.Params.MenuID {
-					continue
-				}
-
-				menus[i].Items = append(menus[i].Items, newItem)
-				w.JSON(newItem, http.StatusCreated)
-				return
-			}
-
-			w.WriteHeader(http.StatusNotFound)
-		})
-
-	zeal.BodyRoute(router, "PUT /item",
-		func(w zeal.ResponseWriter[models.Item], r *zeal.Request[any], b models.Item) {
-			updatedItem := b
-			for i := range menus {
-				for j := range menus[i].Items {
-					if menus[i].Items[j].Name == updatedItem.Name {
-						menus[i].Items[j].Price = updatedItem.Price
-						w.JSON(menus[i].Items[j])
-						return
-					}
-				}
-			}
-
-			w.WriteHeader(http.StatusNotFound)
-		})
-
-	zeal.Route(router, "DELETE /item", handleDeleteItem)
-}
-
-type DeleteItem struct {
-	Name string
-}
-
-func handleDeleteItem(w zeal.ResponseWriter[any], r *zeal.Request[DeleteItem]) {
 	for i := range menus {
 		for j := range menus[i].Items {
-			if menus[i].Items[j].Name == r.Params.Name {
-				menus[i].Items = append(menus[i].Items[:i], menus[i].Items[i+1:]...)
-				w.WriteHeader(http.StatusNoContent)
-				return
+			if menus[i].Items[j].Name == updateItem.Name {
+				if !c.Params.Quiet {
+					fmt.Println("Updating item: ", updateItem)
+				}
+				menus[i].Items[j].Price = updateItem.Price
+				return updateItem
 			}
 		}
 	}
 
-	w.WriteHeader(http.StatusNotFound)
+	if !c.Params.Quiet {
+		fmt.Println("Creating new item: ", updateItem)
+	}
+	menus[0].Items = append(menus[0].Items, updateItem)
+	c.Status(http.StatusCreated)
+	return updateItem
 }
