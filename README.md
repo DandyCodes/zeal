@@ -66,7 +66,7 @@ type GetMenu struct {
 }
 zeal.Pull(r, "GET /menu/{MenuID}", func(c zeal.Ctx[GetMenu]) models.Menu {
     for _, menu := range menus {
-        if menu.ID == c.Param.MenuID {
+        if menu.ID == c.Params.MenuID {
             return menu
         }
     }
@@ -84,15 +84,15 @@ Params struct can be defined in-line
 zeal.Ping(r, "DELETE /item", func(c zeal.Ctx[struct{ Name string }]) {
     for i := range menus {
         for j := range menus[i].Items {
-            if menus[i].Items[j].Name == c.Param.Name {
+            if menus[i].Items[j].Name == c.Params.Name {
                 menus[i].Items = append(menus[i].Items[:i], menus[i].Items[i+1:]...)
-                c.W.WriteHeader(http.StatusNoContent)
+                c.Status(http.StatusNoContent)
                 return
             }
         }
     }
 
-    c.W.WriteHeader(http.StatusNotFound)
+    c.Status(http.StatusNotFound)
 })
 ```
 
@@ -106,20 +106,20 @@ If this fails, http.StatusUnprocessableEntity 422 is sent immediately
 zeal.Push(r, "POST /item", func(c zeal.Ctx[struct{ MenuID int }], body models.Item) {
     newItem := body
     if newItem.Price < 0 {
-        c.W.WriteHeader(http.StatusBadRequest)
+        c.Status(http.StatusBadRequest)
         return
     }
 
     for i := range menus {
-        if menus[i].ID != c.Param.MenuID {
+        if menus[i].ID != c.Params.MenuID {
             continue
         }
         menus[i].Items = append(menus[i].Items, newItem)
-        c.W.WriteHeader(http.StatusCreated)
+        c.Status(http.StatusCreated)
         return
     }
 
-    c.W.WriteHeader(http.StatusNotFound)
+    c.Status(http.StatusNotFound)
 })
 ```
 
@@ -140,7 +140,7 @@ func handleUpsertItem(c zeal.Ctx[struct{ Quiet bool }], updateItem models.Item) 
     for i := range menus {
         for j := range menus[i].Items {
             if menus[i].Items[j].Name == updateItem.Name {
-                if !c.Param.Quiet {
+                if !c.Params.Quiet {
                     fmt.Println("Updating item: ", updateItem)
                 }
                 menus[i].Items[j].Price = updateItem.Price
@@ -149,11 +149,11 @@ func handleUpsertItem(c zeal.Ctx[struct{ Quiet bool }], updateItem models.Item) 
         }
     }
 
-    if !c.Param.Quiet {
+    if !c.Params.Quiet {
         fmt.Println("Creating new item: ", updateItem)
     }
     menus[0].Items = append(menus[0].Items, updateItem)
-    c.W.WriteHeader(http.StatusCreated)
+    c.Status(http.StatusCreated)
     return updateItem
 }
 ```
