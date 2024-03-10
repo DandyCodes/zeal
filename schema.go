@@ -17,10 +17,10 @@ type RouteSchema struct {
 	responseType reflect.Type
 }
 
-func getRouteSchema[ResponseType, ParamsType, BodyType any](pattern string) RouteSchema {
-	var params ParamsType
-	var body BodyType
-	var response ResponseType
+func getRouteSchema[T_Response, T_Params, T_Body any](pattern string) RouteSchema {
+	var params T_Params
+	var body T_Body
+	var response T_Response
 	return RouteSchema{pattern: pattern, paramsType: reflect.TypeOf(params), bodyType: reflect.TypeOf(body), responseType: reflect.TypeOf(response)}
 }
 

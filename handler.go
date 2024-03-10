@@ -8,10 +8,10 @@ import (
 	"github.com/a-h/rest"
 )
 
-type ReadHandler[ResponseType, ParamsType any] func(ResponseWriter[ResponseType], *Request[ParamsType])
+type ReadHandler[T_Response, T_Params any] func(ResponseWriter[T_Response], *Request[T_Params])
 
-func Read[ResponseType, ParamsType any](router *Router, pattern string, handler ReadHandler[ResponseType, ParamsType]) {
-	routeSchema := getRouteSchema[ResponseType, ParamsType, any](pattern)
+func Read[T_Response, T_Params any](router *Router, pattern string, handler ReadHandler[T_Response, T_Params]) {
+	routeSchema := getRouteSchema[T_Response, T_Params, any](pattern)
 	registerRoute(pattern, router, routeSchema)
 	router.HandleFunc(pattern, unwrapReadHandler(handler))
 }
@@ -29,10 +29,10 @@ func unwrapReadHandler[T_Response, T_Params any](handler func(ResponseWriter[T_R
 	}
 }
 
-type WriteHandler[ResponseType, ParamsType, BodyType any] func(ResponseWriter[ResponseType], *Request[ParamsType], BodyType)
+type WriteHandler[T_Response, T_Params, T_Body any] func(ResponseWriter[T_Response], *Request[T_Params], T_Body)
 
-func Write[ResponseType, ParamsType, BodyType any](router *Router, pattern string, handler WriteHandler[ResponseType, ParamsType, BodyType]) {
-	routeSchema := getRouteSchema[ResponseType, ParamsType, BodyType](pattern)
+func Write[T_Response, T_Params, T_Body any](router *Router, pattern string, handler WriteHandler[T_Response, T_Params, T_Body]) {
+	routeSchema := getRouteSchema[T_Response, T_Params, T_Body](pattern)
 	registerRoute(pattern, router, routeSchema)
 	router.HandleFunc(pattern, unwrapWriteHandler(handler))
 }

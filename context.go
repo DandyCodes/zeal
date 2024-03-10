@@ -5,11 +5,11 @@ import (
 	"net/http"
 )
 
-type ResponseWriter[ResponseType any] struct {
+type ResponseWriter[T_Response any] struct {
 	http.ResponseWriter
 }
 
-func (w *ResponseWriter[ResponseType]) JSON(data ResponseType, status ...int) {
+func (w *ResponseWriter[T_Response]) JSON(data T_Response, status ...int) {
 	w.Header().Add("Content-Type", "application/json")
 	if len(status) > 0 {
 		firstStatus := status[0]
@@ -20,7 +20,7 @@ func (w *ResponseWriter[ResponseType]) JSON(data ResponseType, status ...int) {
 	}
 }
 
-type Request[ParamsType any] struct {
+type Request[T_Params any] struct {
 	*http.Request
-	Params ParamsType
+	Params T_Params
 }

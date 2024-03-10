@@ -9,9 +9,9 @@ import (
 	"strconv"
 )
 
-func getParams[ParamsType any](r *http.Request) (ParamsType, error) {
+func getParams[T_Params any](r *http.Request) (T_Params, error) {
 	var error error
-	var params ParamsType
+	var params T_Params
 
 	if reflect.TypeOf(params) == nil {
 		return params, error
@@ -34,7 +34,7 @@ func getParams[ParamsType any](r *http.Request) (ParamsType, error) {
 		}
 	}
 
-	params = newParamsStruct.Interface().(ParamsType)
+	params = newParamsStruct.Interface().(T_Params)
 
 	return params, error
 }
@@ -157,14 +157,14 @@ func isUintInRange(val uint64, kind reflect.Kind) bool {
 	}
 }
 
-func getBody[BodyType any](r *http.Request) (BodyType, bool) {
-	var b BodyType
+func getBody[T_Body any](r *http.Request) (T_Body, bool) {
+	var b T_Body
 	bodyType := reflect.TypeOf(b)
 	if bodyType == nil {
 		return b, true
 	}
 
-	var body BodyType
+	var body T_Body
 
 	defer r.Body.Close()
 
