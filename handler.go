@@ -8,15 +8,15 @@ import (
 	"github.com/a-h/rest"
 )
 
-type ReadHandler[T_Response, T_Params any] func(ResponseWriter[T_Response], *Request[T_Params])
+type HandlerFunc[T_Response, T_Params any] func(ResponseWriter[T_Response], *Request[T_Params])
 
-func Read[T_Response, T_Params any](router *Router, pattern string, handler ReadHandler[T_Response, T_Params]) {
+func Route[T_Response, T_Params any](router *Router, pattern string, handler HandlerFunc[T_Response, T_Params]) {
 	routeSchema := getRouteSchema[T_Response, T_Params, any](pattern)
 	registerRoute(pattern, router, routeSchema)
-	router.HandleFunc(pattern, unwrapReadHandler(handler))
+	router.HandleFunc(pattern, unwrapHandlerFunc(handler))
 }
 
-func unwrapReadHandler[T_Response, T_Params any](handler func(ResponseWriter[T_Response], *Request[T_Params])) http.HandlerFunc {
+func unwrapHandlerFunc[T_Response, T_Params any](handler func(ResponseWriter[T_Response], *Request[T_Params])) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params, err := getParams[T_Params](r)
 		if err != nil {
@@ -29,15 +29,15 @@ func unwrapReadHandler[T_Response, T_Params any](handler func(ResponseWriter[T_R
 	}
 }
 
-type WriteHandler[T_Response, T_Params, T_Body any] func(ResponseWriter[T_Response], *Request[T_Params], T_Body)
+type BodyHandlerFunc[T_Response, T_Params, T_Body any] func(ResponseWriter[T_Response], *Request[T_Params], T_Body)
 
-func Write[T_Response, T_Params, T_Body any](router *Router, pattern string, handler WriteHandler[T_Response, T_Params, T_Body]) {
+func BodyRoute[T_Response, T_Params, T_Body any](router *Router, pattern string, handler BodyHandlerFunc[T_Response, T_Params, T_Body]) {
 	routeSchema := getRouteSchema[T_Response, T_Params, T_Body](pattern)
 	registerRoute(pattern, router, routeSchema)
-	router.HandleFunc(pattern, unwrapWriteHandler(handler))
+	router.HandleFunc(pattern, unwrapBodyHandlerFunc(handler))
 }
 
-func unwrapWriteHandler[T_Response, T_Params, T_Body any](handler func(ResponseWriter[T_Response], *Request[T_Params], T_Body)) http.HandlerFunc {
+func unwrapBodyHandlerFunc[T_Response, T_Params, T_Body any](handler func(ResponseWriter[T_Response], *Request[T_Params], T_Body)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params, err := getParams[T_Params](r)
 		if err != nil {

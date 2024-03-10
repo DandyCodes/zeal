@@ -28,9 +28,9 @@ Routes are documented in the OpenAPI spec
 
 ```go
 func addRoutes(router *zeal.Router) {
-    zeal.Read(router, "GET /",
+    zeal.Route(router, "GET /",
        func(w zeal.ResponseWriter[any], r *zeal.Request[any]) {
-          w.Write([]byte("Hello, world!"))
+          w.BodyRoute([]byte("Hello, world!"))
     })
 }
 ```
@@ -40,7 +40,7 @@ func addRoutes(router *zeal.Router) {
 This route responds with an integer - zeal.ResponseWriter[int]
 
 ```go
-zeal.Read(router, "GET /the_answer",
+zeal.Route(router, "GET /the_answer",
     func(w zeal.ResponseWriter[int], r *zeal.Request[any]) {
        w.JSON(42)
     })
@@ -73,7 +73,7 @@ type GetMenu struct {
     MenuID int  // path param
     Quiet  bool // query param
 }
-zeal.Read(router, "GET /menu/{MenuID}",
+zeal.Route(router, "GET /menu/{MenuID}",
     func(w zeal.ResponseWriter[models.Menu], r *zeal.Request[GetMenu]) {
         for _, menu := range menus {
             if menu.ID == r.Params.MenuID {
@@ -99,13 +99,13 @@ If this fails, http.StatusUnprocessableEntity 422 is sent immediately
 
 ---
 
-Write routes can have a request body
+This route has a request body
 
 ```go
 type PostItem struct {
     MenuID int
 }
-zeal.Write(router, "POST /item",
+zeal.BodyRoute(router, "POST /item",
     func(w zeal.ResponseWriter[models.Item], r *zeal.Request[PostItem], body models.Item) {
         newItem := body
         if newItem.Price < 10 {
@@ -136,7 +136,7 @@ If this fails, http.StatusUnprocessableEntity 422 is sent immediately
 Put request with no params
 
 ```go
-zeal.Write(router, "PUT /item",
+zeal.BodyRoute(router, "PUT /item",
     func(w zeal.ResponseWriter[models.Item], r *zeal.Request[any], b models.Item) {
         updatedItem := b
         for i := range menus {
@@ -153,16 +153,18 @@ zeal.Write(router, "PUT /item",
     })
 ```
 
-Delete request with no body and handler function declared in outer scope
+---
+
+Delete request with handler function declared in outer scope
 
 ```go
-zeal.Write(router, "DELETE /item", handleDeleteItem)
+zeal.Route(router, "DELETE /item", handleDeleteItem)
 
 type DeleteItem struct {
     Name string
 }
 
-func handleDeleteItem(w zeal.ResponseWriter[any], r *zeal.Request[DeleteItem], b any) {
+func handleDeleteItem(w zeal.ResponseWriter[any], r *zeal.Request[DeleteItem]) {
     for i := range menus {
         for j := range menus[i].Items {
             if menus[i].Items[j].Name == r.Params.Name {

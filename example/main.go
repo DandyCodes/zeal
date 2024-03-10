@@ -8,33 +8,52 @@ import (
 	"github.com/DandyCodes/zeal/example/models"
 )
 
+func main() {
+	router := zeal.NewRouter("API")
+
+	addRoutes(router)
+
+	router.Api.StripPkgPaths = []string{"main", "models", "github.com/DandyCodes/zeal"}
+	spec := router.CreateSpec("v1.0.0", "Spec")
+	router.ServeSwaggerUI(spec, "GET /swagger-ui/")
+
+	fmt.Println("Listening on port 3000...")
+	fmt.Println("Visit http://localhost:3000/swagger-ui to see API definitions")
+	http.ListenAndServe(":3000", router)
+}
+
+var foodMenu = models.Menu{
+	ID:    1,
+	Items: []models.Item{{Name: "Steak", Price: 13.95}, {Name: "Potatoes", Price: 3.95}},
+}
+
+var drinksMenu = models.Menu{
+	ID:    2,
+	Items: []models.Item{{Name: "Juice", Price: 1.25}, {Name: "Soda", Price: 1.75}},
+}
+
+var menus = []models.Menu{foodMenu, drinksMenu}
+
 func addRoutes(router *zeal.Router) {
-	// This route is documented in the OpenAPI spec
-	zeal.Read(router, "GET /",
+	zeal.Route(router, "GET /",
 		func(w zeal.ResponseWriter[any], r *zeal.Request[any]) {
 			w.Write([]byte("Hello, world!"))
 		})
 
-	// This route responds with an integer - zeal.ResponseWriter[int]
-	zeal.Read(router, "GET /the_answer",
+	zeal.Route(router, "GET /the_answer",
 		func(w zeal.ResponseWriter[int], r *zeal.Request[any]) {
-			// This JSON convenience method will only accept data of the declared response type
 			w.JSON(42)
 		})
 
-	// Fields representing both path and query URL parameters - must be capitalized
 	type GetMenu struct {
-		MenuID int  // path param
-		Quiet  bool // query param
+		MenuID int
+		Quiet  bool
 	}
-	zeal.Read(router, "GET /menu/{MenuID}",
+	zeal.Route(router, "GET /menu/{MenuID}",
 		func(w zeal.ResponseWriter[models.Menu], r *zeal.Request[GetMenu]) {
-			// Params are converted to their declared type
-			// http.StatusUnprocessableEntity 422 is sent if this fails
-
 			for _, menu := range menus {
 				if menu.ID == r.Params.MenuID {
-					w.JSON(menu, http.StatusOK) // status optional - OK 200 sent by default
+					w.JSON(menu, http.StatusOK)
 					if !r.Params.Quiet {
 						fmt.Println("Found menu: ", menu)
 						fmt.Println("Returning early")
@@ -52,12 +71,8 @@ func addRoutes(router *zeal.Router) {
 	type PostItem struct {
 		MenuID int
 	}
-	// This route has a request body
-	zeal.Write(router, "POST /item",
+	zeal.BodyRoute(router, "POST /item",
 		func(w zeal.ResponseWriter[models.Item], r *zeal.Request[PostItem], body models.Item) {
-			// Body is converted to its declared type
-			// http.StatusUnprocessableEntity 422 is sent if this fails
-
 			newItem := body
 			if newItem.Price < 10 {
 				w.WriteHeader(http.StatusBadRequest)
@@ -77,7 +92,7 @@ func addRoutes(router *zeal.Router) {
 			w.WriteHeader(http.StatusNotFound)
 		})
 
-	zeal.Write(router, "PUT /item",
+	zeal.BodyRoute(router, "PUT /item",
 		func(w zeal.ResponseWriter[models.Item], r *zeal.Request[any], b models.Item) {
 			updatedItem := b
 			for i := range menus {
@@ -93,14 +108,14 @@ func addRoutes(router *zeal.Router) {
 			w.WriteHeader(http.StatusNotFound)
 		})
 
-	zeal.Write(router, "DELETE /item", handleDeleteItem)
+	zeal.Route(router, "DELETE /item", handleDeleteItem)
 }
 
 type DeleteItem struct {
 	Name string
 }
 
-func handleDeleteItem(w zeal.ResponseWriter[any], r *zeal.Request[DeleteItem], b any) {
+func handleDeleteItem(w zeal.ResponseWriter[any], r *zeal.Request[DeleteItem]) {
 	for i := range menus {
 		for j := range menus[i].Items {
 			if menus[i].Items[j].Name == r.Params.Name {
@@ -112,30 +127,4 @@ func handleDeleteItem(w zeal.ResponseWriter[any], r *zeal.Request[DeleteItem], b
 	}
 
 	w.WriteHeader(http.StatusNotFound)
-}
-
-var foodMenu = models.Menu{
-	ID:    1,
-	Items: []models.Item{{Name: "Steak", Price: 13.95}, {Name: "Potatoes", Price: 3.95}},
-}
-
-var drinksMenu = models.Menu{
-	ID:    2,
-	Items: []models.Item{{Name: "Juice", Price: 1.25}, {Name: "Soda", Price: 1.75}},
-}
-
-var menus = []models.Menu{foodMenu, drinksMenu}
-
-func main() {
-	router := zeal.NewRouter("API")
-
-	addRoutes(router)
-
-	router.Api.StripPkgPaths = []string{"main", "models", "github.com/DandyCodes/zeal"}
-	spec := router.CreateSpec("v1.0.0", "Spec")
-	router.ServeSwaggerUI(spec, "GET /swagger-ui/")
-
-	fmt.Println("Listening on port 3000...")
-	fmt.Println("Visit http://localhost:3000/swagger-ui to see API definitions")
-	http.ListenAndServe(":3000", router)
 }
