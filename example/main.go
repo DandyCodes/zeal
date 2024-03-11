@@ -35,83 +35,78 @@ var drinksMenu = models.Menu{
 var menus = []models.Menu{foodMenu, drinksMenu}
 
 func addRoutes(r *zeal.Router) {
-	zeal.Ping(r, "POST /", func(c zeal.Ctx[any]) {
+	zeal.Handle(r, "POST /", func(c zeal.Ctx[any], params any, body any) {
 		fmt.Println("Hello, world!")
 	})
 
-	zeal.Pull(r, "GET /", func(c zeal.Ctx[any]) int {
-		return 42
+	zeal.Handle(r, "GET /answer", func(c zeal.Ctx[int], p any, b any) {
+		c.JSON(42)
 	})
 
-	type GetMenu struct {
-		MenuID int
-	}
-	zeal.Pull(r, "GET /menu/{MenuID}", func(c zeal.Ctx[GetMenu]) models.Menu {
+	zeal.Handle(r, "GET /menus", func(c zeal.Ctx[[]models.Menu], p any, b any) {
+		c.JSON(menus, http.StatusOK)
+	})
+
+	zeal.Handle(r, "GET /menus/{ID}", func(c zeal.Ctx[models.Menu], p struct{ ID int }, b any) {
 		for _, menu := range menus {
-			if menu.ID == c.Params.MenuID {
-				return menu
+			if menu.ID == p.ID {
+				c.JSON(menu)
+				return
 			}
 		}
-		return zeal.Error[models.Menu](c, http.StatusNotFound)
+		c.Error(http.StatusNotFound)
 	})
 
-	zeal.Ping(r, "DELETE /item", func(c zeal.Ctx[struct{ Name string }]) {
-		for i := range menus {
-			for j := range menus[i].Items {
-				if menus[i].Items[j].Name == c.Params.Name {
-					menus[i].Items = append(menus[i].Items[:i], menus[i].Items[i+1:]...)
-					c.Status(http.StatusNoContent)
-					return
+	type PutItemParams struct {
+		Quiet bool
+	}
+	zeal.Handle(r, "PUT /items",
+		func(c zeal.Ctx[models.Item], p PutItemParams, item models.Item) {
+			if item.Price < 0 {
+				c.Error(http.StatusBadRequest, "Price cannot be negative")
+				return
+			}
+
+			for i := range menus {
+				for j := range menus[i].Items {
+					if menus[i].Items[j].Name == item.Name {
+						if !p.Quiet {
+							fmt.Println("Updating item:", item)
+						}
+						menus[i].Items[j].Price = item.Price
+						updatedItem := menus[i].Items[j]
+						c.JSON(updatedItem)
+						return
+					}
 				}
 			}
-		}
 
-		c.Status(http.StatusNotFound)
-	})
-
-	zeal.Push(r, "POST /item", func(c zeal.Ctx[struct{ MenuID int }], body models.Item) {
-		newItem := body
-		if newItem.Price < 0 {
-			c.Status(http.StatusBadRequest)
-			return
-		}
-
-		for i := range menus {
-			if menus[i].ID != c.Params.MenuID {
-				continue
+			if !p.Quiet {
+				fmt.Println("Creating new item:", item)
 			}
-			menus[i].Items = append(menus[i].Items, newItem)
-			c.Status(http.StatusCreated)
-			return
-		}
+			menus[0].Items = append(menus[0].Items, item)
+			updatedItem := menus[0].Items[len(menus[0].Items)-1]
+			c.JSON(updatedItem, http.StatusCreated)
+		})
 
-		c.Status(http.StatusNotFound)
-	})
-
-	zeal.Trade(r, "PUT /item", handleUpsertItem)
+	zeal.Handle(r, "POST /items", HandlePostItem)
 }
 
-func handleUpsertItem(c zeal.Ctx[struct{ Quiet bool }], updateItem models.Item) models.Item {
-	if updateItem.Price < 0 {
-		return zeal.Error[models.Item](c, http.StatusBadRequest)
+func HandlePostItem(c zeal.Ctx[any], p struct{ MenuID int }, newItem models.Item) {
+	if newItem.Price < 0 {
+		c.Error(http.StatusBadRequest, "Price cannot be negative")
+		return
 	}
 
 	for i := range menus {
-		for j := range menus[i].Items {
-			if menus[i].Items[j].Name == updateItem.Name {
-				if !c.Params.Quiet {
-					fmt.Println("Updating item: ", updateItem)
-				}
-				menus[i].Items[j].Price = updateItem.Price
-				return updateItem
-			}
+		if menus[i].ID != p.MenuID {
+			continue
 		}
+
+		menus[i].Items = append(menus[i].Items, newItem)
+		c.Status(http.StatusCreated)
+		return
 	}
 
-	if !c.Params.Quiet {
-		fmt.Println("Creating new item: ", updateItem)
-	}
-	menus[0].Items = append(menus[0].Items, updateItem)
-	c.Status(http.StatusCreated)
-	return updateItem
+	c.Error(http.StatusNotFound)
 }

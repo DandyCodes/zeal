@@ -12,16 +12,16 @@ import (
 
 type routeSchema struct {
 	pattern      string
+	responseType reflect.Type
 	paramsType   reflect.Type
 	bodyType     reflect.Type
-	responseType reflect.Type
 }
 
-func getRouteSchema[T_Params, T_Body, T_Response any](pattern string) routeSchema {
+func getRouteSchema[T_Response, T_Params, T_Body any](pattern string) routeSchema {
+	var response T_Response
 	var params T_Params
 	var body T_Body
-	var response T_Response
-	return routeSchema{pattern: pattern, paramsType: reflect.TypeOf(params), bodyType: reflect.TypeOf(body), responseType: reflect.TypeOf(response)}
+	return routeSchema{pattern, reflect.TypeOf(response), reflect.TypeOf(params), reflect.TypeOf(body)}
 }
 
 func registerRequestModel(route *rest.Route, bodyType reflect.Type) {

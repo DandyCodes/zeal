@@ -26,19 +26,27 @@ func main() {
 
 ---
 
+Routes handled by Zeal are automatically documented in the OpenAPI schema
+
+This route has no response body, URL params or request body
+
 ```go
-zeal.Ping(r, "POST /", func(c zeal.Ctx[any]) {
+zeal.Handle(r, "POST /", func(c zeal.Ctx[any], params any, body any) {
     fmt.Println("Hello, world!")
 })
 ```
 
-**Ping** doesn't return a response body but **Pull** does
+The route context receives the response type as a type parameter
+
+This route responds with an int - zeal.Ctx[int]
 
 ```go
-zeal.Pull(r, "GET /", func(c zeal.Ctx[any]) int {
-    return 42
+zeal.Handle(r, "GET /answer", func(c zeal.Ctx[int], p any, b any) {
+    c.JSON(42)
 })
 ```
+
+The JSON method will only accept data of the declared response type
 
 ---
 
@@ -58,102 +66,95 @@ var drinksMenu = models.Menu{
 var menus = []models.Menu{foodMenu, drinksMenu}
 ```
 
-Struct representing URL parameters - fields must be capitalized (i.e. 'MenuID')
+This route responds with a slice of menus - zeal.Ctx[[]models.Menu]
 
 ```go
-type GetMenu struct {
-    MenuID int
-}
-zeal.Pull(r, "GET /menu/{MenuID}", func(c zeal.Ctx[GetMenu]) models.Menu {
-    for _, menu := range menus {
-        if menu.ID == c.Params.MenuID {
-            return menu
-        }
-    }
-    return zeal.Error[models.Menu](c, http.StatusNotFound)
+zeal.Handle(r, "GET /menus", func(c zeal.Ctx[[]models.Menu], p any, b any) {
+    c.JSON(menus, http.StatusOK)
 })
 ```
 
-Returning an **Error** ends the request with empty data of the correct type
+The JSON method can be passed an optional HTTP status code (the route responds with 200 OK by default)
+
+---
 
 Params can be query or path params
 
-Params struct can be defined in-line
+Struct representing URL params can be defined in-line
 
 ```go
-zeal.Ping(r, "DELETE /item", func(c zeal.Ctx[struct{ Name string }]) {
-    for i := range menus {
-        for j := range menus[i].Items {
-            if menus[i].Items[j].Name == c.Params.Name {
-                menus[i].Items = append(menus[i].Items[:i], menus[i].Items[i+1:]...)
-                c.Status(http.StatusNoContent)
-                return
-            }
+zeal.Handle(r, "GET /menus/{ID}", func(c zeal.Ctx[models.Menu], p struct{ ID int }, b any) {
+    for _, menu := range menus {
+        if menu.ID == p.ID {
+            c.JSON(menu)
+            return
         }
     }
-
-    c.Status(http.StatusNotFound)
+    c.Error(http.StatusNotFound)
 })
 ```
 
-Params are converted to their declared type
+Params struct fields must be capitalized (i.e. 'Quiet')
+
+```go
+type PutItemParams struct {
+    Quiet bool
+}
+zeal.Handle(r, "PUT /items",
+    func(c zeal.Ctx[models.Item], p PutItemParams, item models.Item) {
+        if item.Price < 0 {
+            c.Error(http.StatusBadRequest, "Price cannot be negative")
+            return
+        }
+
+        for i := range menus {
+            for j := range menus[i].Items {
+                if menus[i].Items[j].Name == item.Name {
+                    if !p.Quiet {
+                        fmt.Println("Updating item:", item)
+                    }
+                    menus[i].Items[j].Price = item.Price
+                    updatedItem := menus[i].Items[j]
+                    c.JSON(updatedItem)
+                    return
+                }
+            }
+        }
+
+        if !p.Quiet {
+            fmt.Println("Creating new item:", item)
+        }
+        menus[0].Items = append(menus[0].Items, item)
+        updatedItem := menus[0].Items[len(menus[0].Items)-1]
+        c.JSON(updatedItem, http.StatusCreated)
+    })
+```
+
+Params and request bodies are converted to their declared type
 
 If this fails, http.StatusUnprocessableEntity 422 is sent immediately
 
-**Push** takes a request body
-
 ```go
-zeal.Push(r, "POST /item", func(c zeal.Ctx[struct{ MenuID int }], body models.Item) {
-    newItem := body
+zeal.Handle(r, "POST /items", HandlePostItem)
+
+func HandlePostItem(c zeal.Ctx[any], p struct{ MenuID int }, newItem models.Item) {
     if newItem.Price < 0 {
-        c.Status(http.StatusBadRequest)
+        c.Error(http.StatusBadRequest, "Price cannot be negative")
         return
     }
 
     for i := range menus {
-        if menus[i].ID != c.Params.MenuID {
+        if menus[i].ID != p.MenuID {
             continue
         }
+
         menus[i].Items = append(menus[i].Items, newItem)
         c.Status(http.StatusCreated)
         return
     }
 
-    c.Status(http.StatusNotFound)
-})
-```
-
-Like params, the request body is converted to its declared type
-
-If this fails, http.StatusUnprocessableEntity 422 is sent immediately
-
-**Trade** takes a request body and returns a response body
-
-```go
-zeal.Trade(r, "PUT /item", handleUpsertItem)
-
-func handleUpsertItem(c zeal.Ctx[struct{ Quiet bool }], updateItem models.Item) models.Item {
-    if updateItem.Price < 0 {
-        return zeal.Error[models.Item](c, http.StatusBadRequest)
-    }
-
-    for i := range menus {
-        for j := range menus[i].Items {
-            if menus[i].Items[j].Name == updateItem.Name {
-                if !c.Params.Quiet {
-                    fmt.Println("Updating item: ", updateItem)
-                }
-                menus[i].Items[j].Price = updateItem.Price
-                return updateItem
-            }
-        }
-    }
-
-    if !c.Params.Quiet {
-        fmt.Println("Creating new item: ", updateItem)
-    }
-    menus[0].Items = append(menus[0].Items, updateItem)
-    c.Status(http.StatusCreated)
-    return updateItem
+    c.Error(http.StatusNotFound)
 }
 ```
+
+The **Error** method takes an HTTP status code and an optional message
