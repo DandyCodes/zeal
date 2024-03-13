@@ -13,12 +13,12 @@ func main() {
     mux := zeal.NewServeMux("Example API")
     addRoutes(mux)
 
-    apiOptions := zeal.ApiOptions{
+    specOptions := zeal.SpecOptions{
         Version:       "v0.1.0",
         Description:   "Example API description.",
         StripPkgPaths: []string{"main", "models", "github.com/DandyCodes/zeal"},
     }
-    spec, err := mux.CreateAPI(apiOptions)
+    spec, err := mux.CreateSpec(specOptions)
     if err != nil {
         log.Fatalf("Failed to create API: %v", err)
     }

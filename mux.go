@@ -22,53 +22,22 @@ func NewServeMux(apiName ...string) *ServeMux {
 	return &ServeMux{ServeMux: http.NewServeMux(), Api: rest.NewAPI(name)}
 }
 
-type ApiOptions struct {
+type SpecOptions struct {
 	Version       string
 	Description   string
 	StripPkgPaths []string
 }
 
-func (mux *ServeMux) CreateAPI(options ApiOptions) (*openapi3.T, error) {
+func (mux *ServeMux) CreateSpec(options SpecOptions) (*openapi3.T, error) {
 	mux.Api.StripPkgPaths = options.StripPkgPaths
-	spec, err := mux.createSpec(options.Version, options.Description)
-	if err != nil {
-		return nil, err
-	}
 
-	return spec, nil
-}
-
-type ServeOptions struct {
-	Port           int
-	Spec           *openapi3.T
-	ServeSwaggerUI bool
-	SwaggerPattern string
-}
-
-func (mux *ServeMux) ListenAndServe(options ServeOptions) error {
-	if options.ServeSwaggerUI {
-		if err := mux.ServeSwaggerUI(options.Spec, "GET "+options.SwaggerPattern); err != nil {
-			return err
-		}
-	}
-
-	fmt.Printf("Listening on port %v...\n", options.Port)
-	if options.ServeSwaggerUI {
-		fmt.Printf("Visit http://localhost:%v%v to see API definitions\n", options.Port, options.SwaggerPattern)
-	}
-	http.ListenAndServe(fmt.Sprintf(":%v", options.Port), mux)
-
-	return nil
-}
-
-func (mux *ServeMux) createSpec(version string, description string) (*openapi3.T, error) {
 	spec, err := mux.Api.Spec()
 	if err != nil {
 		return nil, err
 	}
 
-	spec.Info.Version = version
-	spec.Info.Description = description
+	spec.Info.Version = options.Version
+	spec.Info.Description = options.Description
 
 	for _, schemaRef := range spec.Components.Schemas {
 		for propertyName := range schemaRef.Value.Properties {
@@ -103,6 +72,29 @@ func removeDefaultResponses(operation *openapi3.Operation) {
 			responses.Set(code, response)
 		}
 	})
+}
+
+type ServeOptions struct {
+	Port           int
+	Spec           *openapi3.T
+	ServeSwaggerUI bool
+	SwaggerPattern string
+}
+
+func (mux *ServeMux) ListenAndServe(options ServeOptions) error {
+	if options.ServeSwaggerUI {
+		if err := mux.ServeSwaggerUI(options.Spec, "GET "+options.SwaggerPattern); err != nil {
+			return err
+		}
+	}
+
+	fmt.Printf("Listening on port %v...\n", options.Port)
+	if options.ServeSwaggerUI {
+		fmt.Printf("Visit http://localhost:%v%v to see API definitions\n", options.Port, options.SwaggerPattern)
+	}
+	http.ListenAndServe(fmt.Sprintf(":%v", options.Port), mux)
+
+	return nil
 }
 
 func (mux *ServeMux) ServeSwaggerUI(spec *openapi3.T, path string) error {
