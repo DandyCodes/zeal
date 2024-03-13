@@ -6,32 +6,35 @@ import (
 	"strconv"
 )
 
-type Ctx[T_Response any] struct {
+type Response[T_Response any] struct {
 	ResponseWriter http.ResponseWriter
 	Request        *http.Request
 }
 
-func (c *Ctx[T_Response]) JSON(data T_Response, status ...int) {
-	c.ResponseWriter.Header().Add("Content-Type", "application/json")
+func (r *Response[T_Response]) JSON(data T_Response, status ...int) {
+	r.ResponseWriter.Header().Add("Content-Type", "application/json")
+
+	if err := json.NewEncoder(r.ResponseWriter).Encode(data); err != nil {
+		r.ResponseWriter.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	if len(status) > 0 {
-		firstStatus := status[0]
-		c.ResponseWriter.WriteHeader(firstStatus)
-	}
-	if err := json.NewEncoder(c.ResponseWriter).Encode(data); err != nil {
-		c.ResponseWriter.WriteHeader(http.StatusInternalServerError)
+		r.ResponseWriter.WriteHeader(status[0])
 	}
 }
 
-func (c Ctx[T_Response]) Status(status int) {
-	c.ResponseWriter.WriteHeader(status)
+func (r Response[T_Response]) Status(status int) {
+	r.ResponseWriter.WriteHeader(status)
 }
 
-func (c Ctx[T_Response]) Error(status int, errorMsg ...string) {
+func (r Response[T_Response]) Error(status int, errorMsg ...string) {
 	if len(errorMsg) > 0 {
-		http.Error(c.ResponseWriter, errorMsg[0], ensureErrorCode(status))
-	} else {
-		http.Error(c.ResponseWriter, http.StatusText(status), ensureErrorCode(status))
+		http.Error(r.ResponseWriter, errorMsg[0], ensureErrorCode(status))
+		return
 	}
+
+	http.Error(r.ResponseWriter, http.StatusText(status), ensureErrorCode(status))
 }
 
 func ensureErrorCode(status int) int {
@@ -39,5 +42,6 @@ func ensureErrorCode(status int) int {
 	if len(codeStr) == 3 && (codeStr[0] == '4' || codeStr[0] == '5') {
 		return status
 	}
+
 	return 500
 }

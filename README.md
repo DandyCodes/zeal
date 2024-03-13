@@ -4,23 +4,32 @@ A type-safe REST API framework for Go!
 
 Structs can be used to define and validate URL parameters, request bodies and response types.
 
-Automatically generates OpenAPI 3 schema documentation using [REST](https://github.com/a-h/rest) and serves it using Swagger.
+Automatically generates fully typed OpenAPI 3 schema documentation using [REST](https://github.com/a-h/rest) and serves it with SwaggerUI.
 
 ## Usage
 
 ```go
 func main() {
-    r := zeal.NewRouter("API")
+    mux := zeal.NewServeMux("Example API")
+    addRoutes(mux)
 
-    addRoutes(r)
+    apiOptions := zeal.ApiOptions{
+        Version:       "v0.1.0",
+        Description:   "Example API description.",
+        StripPkgPaths: []string{"main", "models", "github.com/DandyCodes/zeal"},
+    }
+    spec, err := mux.CreateAPI(apiOptions)
+    if err != nil {
+        log.Fatalf("Failed to create API: %v", err)
+    }
 
-    r.Api.StripPkgPaths = []string{"main", "models", "github.com/DandyCodes/zeal"}
-    spec := r.CreateSpec("v1.0.0", "Spec")
-    r.ServeSwaggerUI(spec, "GET /swagger-ui/")
-
-    fmt.Println("Listening on port 3000...")
-    fmt.Println("Visit http://localhost:3000/swagger-ui to see API definitions")
-    http.ListenAndServe(":3000", r)
+    serveOptions := zeal.ServeOptions{
+        Port:           3975,
+        Spec:           spec,
+        ServeSwaggerUI: true,
+        SwaggerPattern: "/swagger-ui/",
+    }
+    mux.ListenAndServe(serveOptions)
 }
 ```
 
@@ -28,21 +37,21 @@ func main() {
 
 Routes handled by Zeal are automatically documented in the OpenAPI schema
 
-This route has no response body, URL params or request body
+This route has no response type, no URL params and no request body
 
 ```go
-zeal.Handle(r, "POST /", func(c zeal.Ctx[any], params any, body any) {
+zeal.Handle(mux, "POST /", func(r zeal.Response[any], params any, body any) {
     fmt.Println("Hello, world!")
 })
 ```
 
-The route context receives the response type as a type parameter
+The response type is passed as a type parameter
 
-This route responds with an int - zeal.Ctx[int]
+This route responds with an int - zeal.Response[int]
 
 ```go
-zeal.Handle(r, "GET /answer", func(c zeal.Ctx[int], p any, b any) {
-    c.JSON(42)
+zeal.Handle(mux, "GET /answer", func(r zeal.Response[int], p any, b any) {
+    r.JSON(42)
 })
 ```
 
@@ -57,20 +66,18 @@ var foodMenu = models.Menu{
     ID:    1,
     Items: []models.Item{{Name: "Steak", Price: 13.95}, {Name: "Potatoes", Price: 3.95}},
 }
-
 var drinksMenu = models.Menu{
     ID:    2,
     Items: []models.Item{{Name: "Juice", Price: 1.25}, {Name: "Soda", Price: 1.75}},
 }
-
 var menus = []models.Menu{foodMenu, drinksMenu}
 ```
 
-This route responds with a slice of menus - zeal.Ctx[[]models.Menu]
+This route responds with a slice of menus - zeal.Response[[]models.Menu]
 
 ```go
-zeal.Handle(r, "GET /menus", func(c zeal.Ctx[[]models.Menu], p any, b any) {
-    c.JSON(menus, http.StatusOK)
+zeal.Handle(mux, "GET /menus", func(r zeal.Response[[]models.Menu], p any, b any) {
+    r.JSON(menus, http.StatusOK)
 })
 ```
 
@@ -83,14 +90,14 @@ Params can be query or path params
 Struct representing URL params can be defined in-line
 
 ```go
-zeal.Handle(r, "GET /menus/{ID}", func(c zeal.Ctx[models.Menu], p struct{ ID int }, b any) {
+zeal.Handle(mux, "GET /menus/{ID}", func(r zeal.Response[models.Menu], p struct{ ID int }, b any) {
     for _, menu := range menus {
         if menu.ID == p.ID {
-            c.JSON(menu)
+            r.JSON(menu)
             return
         }
     }
-    c.Error(http.StatusNotFound)
+    r.Error(http.StatusNotFound)
 })
 ```
 
@@ -100,10 +107,10 @@ Params struct fields must be capitalized (i.e. 'Quiet')
 type PutItemParams struct {
     Quiet bool
 }
-zeal.Handle(r, "PUT /items",
-    func(c zeal.Ctx[models.Item], p PutItemParams, item models.Item) {
+zeal.Handle(mux, "PUT /items",
+    func(r zeal.Response[models.Item], p PutItemParams, item models.Item) {
         if item.Price < 0 {
-            c.Error(http.StatusBadRequest, "Price cannot be negative")
+            r.Error(http.StatusBadRequest, "Price cannot be negative")
             return
         }
 
@@ -115,7 +122,7 @@ zeal.Handle(r, "PUT /items",
                     }
                     menus[i].Items[j].Price = item.Price
                     updatedItem := menus[i].Items[j]
-                    c.JSON(updatedItem)
+                    r.JSON(updatedItem)
                     return
                 }
             }
@@ -124,9 +131,9 @@ zeal.Handle(r, "PUT /items",
         if !p.Quiet {
             fmt.Println("Creating new item:", item)
         }
-        menus[0].Items = append(menus[0].Items, item)
-        updatedItem := menus[0].Items[len(menus[0].Items)-1]
-        c.JSON(updatedItem, http.StatusCreated)
+        menus[1].Items = append(menus[1].Items, item)
+        updatedItem := menus[1].Items[len(menus[1].Items)-1]
+        r.JSON(updatedItem, http.StatusCreated)
     })
 ```
 
@@ -135,11 +142,11 @@ Params and request bodies are converted to their declared type
 If this fails, http.StatusUnprocessableEntity 422 is sent immediately
 
 ```go
-zeal.Handle(r, "POST /items", HandlePostItem)
+zeal.Handle(mux, "POST /items", HandlePostItem)
 
-func HandlePostItem(c zeal.Ctx[any], p struct{ MenuID int }, newItem models.Item) {
+func HandlePostItem(r zeal.Response[any], p struct{ MenuID int }, newItem models.Item) {
     if newItem.Price < 0 {
-        c.Error(http.StatusBadRequest, "Price cannot be negative")
+        r.Error(http.StatusBadRequest, "Price cannot be negative")
         return
     }
 
@@ -149,12 +156,12 @@ func HandlePostItem(c zeal.Ctx[any], p struct{ MenuID int }, newItem models.Item
         }
 
         menus[i].Items = append(menus[i].Items, newItem)
-        c.Status(http.StatusCreated)
+        r.Status(http.StatusCreated)
         return
     }
 
-    c.Error(http.StatusNotFound)
+    r.Error(http.StatusNotFound)
 }
 ```
 
-The **Error** method takes an HTTP status code and an optional message
+The **Error** method takes an HTTP status code and an optional error message
