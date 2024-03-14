@@ -77,15 +77,17 @@ func addRoutes(mux *zeal.ServeMux) {
 
 			for i := range menus {
 				for j := range menus[i].Items {
-					if menus[i].Items[j].Name == item.Name {
-						if !p.Quiet {
-							fmt.Println("Updating item:", item)
-						}
-						menus[i].Items[j].Price = item.Price
-						updatedItem := menus[i].Items[j]
-						r.JSON(updatedItem)
-						return
+					if menus[i].Items[j].Name != item.Name {
+						continue
 					}
+
+					if !p.Quiet {
+						fmt.Println("Updating item:", item)
+					}
+					menus[i].Items[j].Price = item.Price
+					updatedItem := menus[i].Items[j]
+					r.JSON(updatedItem)
+					return
 				}
 			}
 
