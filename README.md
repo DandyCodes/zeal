@@ -8,7 +8,7 @@ Params and request bodies are automatically converted to their declared types fo
 
 Automatically generates fully typed OpenAPI 3 schema documentation using [REST](https://github.com/a-h/rest) and serves it with SwaggerUI.
 
-## Usage
+## Server
 
 ```go
 func main() {
@@ -35,7 +35,7 @@ func main() {
 }
 ```
 
----
+## Routes
 
 Routes handled by Zeal are automatically documented in the OpenAPI schema
 
@@ -49,6 +49,10 @@ zeal.Handle(mux, "POST /",
     })
 ```
 
+The **Status** method responds with a given HTTP status code
+
+## Responses
+
 The response type is passed as a type parameter
 
 This route responds with an int - zeal.Response[int]
@@ -60,11 +64,9 @@ zeal.Handle(mux, "GET /the_answer",
     })
 ```
 
-The JSON method will only accept data of the declared response type
+The **JSON** method will only accept data of the declared response type
 
----
-
-Example data
+Here is some example data
 
 ```go
 var foodMenu = models.Menu{
@@ -95,11 +97,13 @@ zeal.Handle(mux, "GET /menus",
     })
 ```
 
-The JSON method can be passed an optional HTTP status code (200 OK is sent by default)
+The **JSON** method can be passed an optional HTTP status code (200 OK is sent by default)
 
----
+## Params
 
 Params can be query or path params
+
+Struct fields must begin with a capital letter
 
 Struct representing URL params can be defined in-line
 
@@ -109,7 +113,6 @@ zeal.Handle(mux, "GET /menus/{ID}",
         for _, menu := range menus {
             if menu.ID == p.ID {
                 return r.JSON(menu)
-
             }
         }
 
@@ -117,19 +120,26 @@ zeal.Handle(mux, "GET /menus/{ID}",
     })
 ```
 
-Params and request bodies are converted to their declared type
+Params are converted to their declared type
 
 If this fails, http.StatusUnprocessableEntity 422 is sent immediately
 
+## Bodies
+
+Request bodies are converted to their declared type
+
+If this fails, http.StatusUnprocessableEntity 422 is sent immediately
+
+Struct fields must be capitalized
+
 ```go
-type PutItemParams struct {
+type PutItemsParams struct {
     Quiet bool
 }
 zeal.Handle(mux, "PUT /items",
-    func(r zeal.Response[models.Item], p PutItemParams, item models.Item) error {
+    func(r zeal.Response[models.Item], p PutItemsParams, item models.Item) error {
         if item.Price < 0 {
             return r.Error(http.StatusBadRequest, "Price cannot be negative")
-
         }
 
         for i := range menus {
@@ -144,7 +154,6 @@ zeal.Handle(mux, "PUT /items",
                 menus[i].Items[j].Price = item.Price
                 updatedItem := menus[i].Items[j]
                 return r.JSON(updatedItem)
-
             }
         }
 
@@ -157,7 +166,9 @@ zeal.Handle(mux, "PUT /items",
     })
 ```
 
-Struct fields must be capitalized (i.e. 'Quiet')
+## Errors
+
+The **Error** method takes an HTTP status code and an optional error message
 
 ```go
 zeal.Handle(mux, "POST /items", HandlePostItem)
@@ -176,11 +187,13 @@ func HandlePostItem(r zeal.Response[any], p struct{ MenuID int }, item models.It
         return r.Status(http.StatusCreated)
     }
 
-    return nil
+    return r.Error(http.StatusNotFound)
 }
 ```
 
-The **Error** method takes an HTTP status code and an optional error message
+The **Error** method must be passed a 4xx or 5xx (error) HTTP status code
+
+If it is not passed an error code, it will respond with http.StatusInternalServerError 500 instead
 
 ## Standard Library Integration
 
@@ -212,10 +225,10 @@ However, routes defined this way will not be documented in the OpenAPI spec
 To add middleware such as logging, you can create your own wrapper around zeal.Handle
 
 ```go
-func MyHandle[T_Response, T_Params, T_Body any](
-    mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
+func MyHandle[R, P, B any](
+    mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[R, P, B],
 ) {
-    myHanlderFunc := func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
+    myHanlderFunc := func(r zeal.Response[R], p P, b B) error {
         err := handlerFunc(r, p, b)
         if err != nil {
             log.Println(err)
@@ -231,22 +244,22 @@ And define your route using your wrapper
 ```go
 MyHandle(mux, "GET /errors_logged",
     func(r zeal.Response[[]models.Menu], p any, b any) error {
-        if rand.Float64() > 0.33 {
-            return fmt.Errorf("an error occurred")
+        if rand.Float64() < 0.33 {
+            return r.Error(http.StatusInternalServerError, "an error occurred")
         } else {
             return r.JSON(menus)
         }
     })
 ```
 
+---
+
 Or create a stack of middleware
 
 ```go
-func LogErrorHandle[T_Response, T_Params, T_Body any](
-    handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
-) zeal.HandlerFunc[T_Response, T_Params, T_Body] {
-    return func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
-        err := handlerFunc(r, p, b)
+func LogErrorHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
+    return func(r zeal.Response[R], p P, b B) error {
+        err := next(r, p, b)
         if err != nil {
             log.Println(err)
         }
@@ -254,33 +267,29 @@ func LogErrorHandle[T_Response, T_Params, T_Body any](
     }
 }
 
-func LogRequestHandle[T_Response, T_Params, T_Body any](
-    handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
-) zeal.HandlerFunc[T_Response, T_Params, T_Body] {
-    return func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
+func LogRequestHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
+    return func(r zeal.Response[R], p P, b B) error {
         log.Println(r.Request)
-        return handlerFunc(r, p, b)
+        return next(r, p, b)
     }
 }
 
-func ProtectDdosHandle[T_Response, T_Params, T_Body any](
-    handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
-) zeal.HandlerFunc[T_Response, T_Params, T_Body] {
-    return func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
-        if rand.Float64() > 0.33 {
-            return fmt.Errorf("computer says no")
+func AntiDdosHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
+    return func(r zeal.Response[R], p P, b B) error {
+        if rand.Float64() < 0.33 {
+            return r.Error(http.StatusTeapot, "computer says no")
         }
-        return handlerFunc(r, p, b)
+        return next(r, p, b)
     }
 }
 
-func MyStackHandle[T_Response, T_Params, T_Body any](
-    mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
+func MyStackHandle[R, P, B any](
+    mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[R, P, B],
 ) {
     logErrorHandlerFunc := LogErrorHandle(handlerFunc)
     logRequestHandlerFunc := LogRequestHandle(logErrorHandlerFunc)
-    protectDdosHandlerFunc := ProtectDdosHandle(logRequestHandlerFunc)
-    zeal.Handle(mux, urlPattern, protectDdosHandlerFunc)
+    antiDdosHandlerFunc := AntiDdosHandle(logRequestHandlerFunc)
+    zeal.Handle(mux, urlPattern, antiDdosHandlerFunc)
 }
 ```
 
@@ -289,8 +298,8 @@ And define your route using this wrapper
 ```go
 MyStackHandle(mux, "GET /stack",
     func(r zeal.Response[[]models.Menu], p any, b any) error {
-        if rand.Float64() > 0.33 {
-            return fmt.Errorf("an error occurred")
+        if rand.Float64() < 0.33 {
+            return r.Error(http.StatusInternalServerError, "an error occurred")
         } else {
             return r.JSON(menus)
         }

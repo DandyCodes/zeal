@@ -73,21 +73,19 @@ func addRoutes(mux *zeal.ServeMux) {
 			for _, menu := range menus {
 				if menu.ID == p.ID {
 					return r.JSON(menu)
-
 				}
 			}
 
 			return r.Error(http.StatusNotFound)
 		})
 
-	type PutItemParams struct {
+	type PutItemsParams struct {
 		Quiet bool
 	}
 	zeal.Handle(mux, "PUT /items",
-		func(r zeal.Response[models.Item], p PutItemParams, item models.Item) error {
+		func(r zeal.Response[models.Item], p PutItemsParams, item models.Item) error {
 			if item.Price < 0 {
 				return r.Error(http.StatusBadRequest, "Price cannot be negative")
-
 			}
 
 			for i := range menus {
@@ -102,7 +100,6 @@ func addRoutes(mux *zeal.ServeMux) {
 					menus[i].Items[j].Price = item.Price
 					updatedItem := menus[i].Items[j]
 					return r.JSON(updatedItem)
-
 				}
 			}
 
@@ -131,7 +128,7 @@ func HandlePostItem(r zeal.Response[any], p struct{ MenuID int }, item models.It
 		return r.Status(http.StatusCreated)
 	}
 
-	return nil
+	return r.Error(http.StatusNotFound)
 }
 
 func UseHTTPRequestAndResponse(mux *zeal.ServeMux) {
@@ -149,10 +146,10 @@ func DefineStandardRoute(mux *zeal.ServeMux) {
 	})
 }
 
-func MyHandle[T_Response, T_Params, T_Body any](
-	mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
+func MyHandle[R, P, B any](
+	mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[R, P, B],
 ) {
-	myHanlderFunc := func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
+	myHanlderFunc := func(r zeal.Response[R], p P, b B) error {
 		err := handlerFunc(r, p, b)
 		if err != nil {
 			log.Println(err)
@@ -165,19 +162,17 @@ func MyHandle[T_Response, T_Params, T_Body any](
 func AddMyHandleRoute(mux *zeal.ServeMux) {
 	MyHandle(mux, "GET /errors_logged",
 		func(r zeal.Response[[]models.Menu], p any, b any) error {
-			if rand.Float64() > 0.33 {
-				return fmt.Errorf("an error occurred")
+			if rand.Float64() < 0.33 {
+				return r.Error(http.StatusInternalServerError, "an error occurred")
 			} else {
 				return r.JSON(menus)
 			}
 		})
 }
 
-func LogErrorHandle[T_Response, T_Params, T_Body any](
-	handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
-) zeal.HandlerFunc[T_Response, T_Params, T_Body] {
-	return func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
-		err := handlerFunc(r, p, b)
+func LogErrorHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
+	return func(r zeal.Response[R], p P, b B) error {
+		err := next(r, p, b)
 		if err != nil {
 			log.Println(err)
 		}
@@ -185,40 +180,36 @@ func LogErrorHandle[T_Response, T_Params, T_Body any](
 	}
 }
 
-func LogRequestHandle[T_Response, T_Params, T_Body any](
-	handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
-) zeal.HandlerFunc[T_Response, T_Params, T_Body] {
-	return func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
+func LogRequestHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
+	return func(r zeal.Response[R], p P, b B) error {
 		log.Println(r.Request)
-		return handlerFunc(r, p, b)
+		return next(r, p, b)
 	}
 }
 
-func ProtectDdosHandle[T_Response, T_Params, T_Body any](
-	handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
-) zeal.HandlerFunc[T_Response, T_Params, T_Body] {
-	return func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
-		if rand.Float64() > 0.33 {
-			return fmt.Errorf("computer says no")
+func AntiDdosHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
+	return func(r zeal.Response[R], p P, b B) error {
+		if rand.Float64() < 0.33 {
+			return r.Error(http.StatusTeapot, "computer says no")
 		}
-		return handlerFunc(r, p, b)
+		return next(r, p, b)
 	}
 }
 
-func MyStackHandle[T_Response, T_Params, T_Body any](
-	mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
+func MyStackHandle[R, P, B any](
+	mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[R, P, B],
 ) {
 	logErrorHandlerFunc := LogErrorHandle(handlerFunc)
 	logRequestHandlerFunc := LogRequestHandle(logErrorHandlerFunc)
-	protectDdosHandlerFunc := ProtectDdosHandle(logRequestHandlerFunc)
-	zeal.Handle(mux, urlPattern, protectDdosHandlerFunc)
+	antiDdosHandlerFunc := AntiDdosHandle(logRequestHandlerFunc)
+	zeal.Handle(mux, urlPattern, antiDdosHandlerFunc)
 }
 
 func AddMyStackHandleRoute(mux *zeal.ServeMux) {
 	MyStackHandle(mux, "GET /stack",
 		func(r zeal.Response[[]models.Menu], p any, b any) error {
-			if rand.Float64() > 0.33 {
-				return fmt.Errorf("an error occurred")
+			if rand.Float64() < 0.33 {
+				return r.Error(http.StatusInternalServerError, "an error occurred")
 			} else {
 				return r.JSON(menus)
 			}
