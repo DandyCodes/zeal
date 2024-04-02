@@ -4,7 +4,7 @@ import (
 	"net/http"
 )
 
-type HandlerFunc[T_Response, T_Params, T_Body any] func(Response[T_Response], T_Params, T_Body)
+type HandlerFunc[T_Response, T_Params, T_Body any] func(Response[T_Response], T_Params, T_Body) error
 
 func Handle[T_Response, T_Params, T_Body any](mux *ServeMux, pattern string, handlerFunc HandlerFunc[T_Response, T_Params, T_Body]) {
 	registerRoute[T_Response, T_Params, T_Body](pattern, mux)

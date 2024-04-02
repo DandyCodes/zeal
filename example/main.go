@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 
 	"github.com/DandyCodes/zeal"
@@ -33,46 +34,60 @@ func main() {
 }
 
 var foodMenu = models.Menu{
-	ID:    1,
-	Items: []models.Item{{Name: "Steak", Price: 13.95}, {Name: "Potatoes", Price: 3.95}},
+	ID: 1,
+	Items: []models.Item{
+		{Name: "Steak", Price: 13.95},
+		{Name: "Potatoes", Price: 3.95},
+	},
 }
+
 var drinksMenu = models.Menu{
-	ID:    2,
-	Items: []models.Item{{Name: "Juice", Price: 1.25}, {Name: "Soda", Price: 1.75}},
+	ID: 2,
+	Items: []models.Item{
+		{Name: "Juice", Price: 1.25},
+		{Name: "Soda", Price: 1.75},
+	},
 }
+
 var menus = []models.Menu{foodMenu, drinksMenu}
 
 func addRoutes(mux *zeal.ServeMux) {
-	zeal.Handle(mux, "POST /", func(r zeal.Response[any], params any, body any) {
-		fmt.Println("Hello, world!")
-	})
+	zeal.Handle(mux, "POST /",
+		func(response zeal.Response[any], params any, body any) error {
+			fmt.Println("Hello, world!")
+			return response.Status(http.StatusOK)
+		})
 
-	zeal.Handle(mux, "GET /answer", func(r zeal.Response[int], p any, b any) {
-		r.JSON(42)
-	})
+	zeal.Handle(mux, "GET /the_answer",
+		func(r zeal.Response[int], p any, b any) error {
+			return r.JSON(42)
+		})
 
-	zeal.Handle(mux, "GET /menus", func(r zeal.Response[[]models.Menu], p any, b any) {
-		r.JSON(menus, http.StatusOK)
-	})
+	zeal.Handle(mux, "GET /menus",
+		func(r zeal.Response[[]models.Menu], p any, b any) error {
+			return r.JSON(menus, http.StatusOK)
+		})
 
-	zeal.Handle(mux, "GET /menus/{ID}", func(r zeal.Response[models.Menu], p struct{ ID int }, b any) {
-		for _, menu := range menus {
-			if menu.ID == p.ID {
-				r.JSON(menu)
-				return
+	zeal.Handle(mux, "GET /menus/{ID}",
+		func(r zeal.Response[models.Menu], p struct{ ID int }, b any) error {
+			for _, menu := range menus {
+				if menu.ID == p.ID {
+					return r.JSON(menu)
+
+				}
 			}
-		}
-		r.Error(http.StatusNotFound)
-	})
+
+			return r.Error(http.StatusNotFound)
+		})
 
 	type PutItemParams struct {
 		Quiet bool
 	}
 	zeal.Handle(mux, "PUT /items",
-		func(r zeal.Response[models.Item], p PutItemParams, item models.Item) {
+		func(r zeal.Response[models.Item], p PutItemParams, item models.Item) error {
 			if item.Price < 0 {
-				r.Error(http.StatusBadRequest, "Price cannot be negative")
-				return
+				return r.Error(http.StatusBadRequest, "Price cannot be negative")
+
 			}
 
 			for i := range menus {
@@ -86,8 +101,8 @@ func addRoutes(mux *zeal.ServeMux) {
 					}
 					menus[i].Items[j].Price = item.Price
 					updatedItem := menus[i].Items[j]
-					r.JSON(updatedItem)
-					return
+					return r.JSON(updatedItem)
+
 				}
 			}
 
@@ -96,16 +111,15 @@ func addRoutes(mux *zeal.ServeMux) {
 			}
 			menus[1].Items = append(menus[1].Items, item)
 			updatedItem := menus[1].Items[len(menus[1].Items)-1]
-			r.JSON(updatedItem, http.StatusCreated)
+			return r.JSON(updatedItem, http.StatusCreated)
 		})
 
 	zeal.Handle(mux, "POST /items", HandlePostItem)
 }
 
-func HandlePostItem(r zeal.Response[any], p struct{ MenuID int }, newItem models.Item) {
-	if newItem.Price < 0 {
-		r.Error(http.StatusBadRequest, "Price cannot be negative")
-		return
+func HandlePostItem(r zeal.Response[any], p struct{ MenuID int }, item models.Item) error {
+	if item.Price < 0 {
+		return r.Error(http.StatusBadRequest, "Price cannot be negative")
 	}
 
 	for i := range menus {
@@ -113,10 +127,100 @@ func HandlePostItem(r zeal.Response[any], p struct{ MenuID int }, newItem models
 			continue
 		}
 
-		menus[i].Items = append(menus[i].Items, newItem)
-		r.Status(http.StatusCreated)
-		return
+		menus[i].Items = append(menus[i].Items, item)
+		return r.Status(http.StatusCreated)
 	}
 
-	r.Error(http.StatusNotFound)
+	return nil
+}
+
+func UseHTTPRequestAndResponse(mux *zeal.ServeMux) {
+	zeal.Handle(mux, "GET /",
+		func(r zeal.Response[any], p any, b any) error {
+			fmt.Println(r.Request)        // *http.Request
+			fmt.Println(r.ResponseWriter) // http.ResponseWriter
+			return nil
+		})
+}
+
+func DefineStandardRoute(mux *zeal.ServeMux) {
+	mux.HandleFunc("GET /std", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello!"))
+	})
+}
+
+func MyHandle[T_Response, T_Params, T_Body any](
+	mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
+) {
+	myHanlderFunc := func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
+		err := handlerFunc(r, p, b)
+		if err != nil {
+			log.Println(err)
+		}
+		return err
+	}
+	zeal.Handle(mux, urlPattern, myHanlderFunc)
+}
+
+func AddMyHandleRoute(mux *zeal.ServeMux) {
+	MyHandle(mux, "GET /errors_logged",
+		func(r zeal.Response[[]models.Menu], p any, b any) error {
+			if rand.Float64() > 0.33 {
+				return fmt.Errorf("an error occurred")
+			} else {
+				return r.JSON(menus)
+			}
+		})
+}
+
+func LogErrorHandle[T_Response, T_Params, T_Body any](
+	handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
+) zeal.HandlerFunc[T_Response, T_Params, T_Body] {
+	return func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
+		err := handlerFunc(r, p, b)
+		if err != nil {
+			log.Println(err)
+		}
+		return err
+	}
+}
+
+func LogRequestHandle[T_Response, T_Params, T_Body any](
+	handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
+) zeal.HandlerFunc[T_Response, T_Params, T_Body] {
+	return func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
+		log.Println(r.Request)
+		return handlerFunc(r, p, b)
+	}
+}
+
+func ProtectDdosHandle[T_Response, T_Params, T_Body any](
+	handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
+) zeal.HandlerFunc[T_Response, T_Params, T_Body] {
+	return func(r zeal.Response[T_Response], p T_Params, b T_Body) error {
+		if rand.Float64() > 0.33 {
+			return fmt.Errorf("computer says no")
+		}
+		return handlerFunc(r, p, b)
+	}
+}
+
+func MyStackHandle[T_Response, T_Params, T_Body any](
+	mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[T_Response, T_Params, T_Body],
+) {
+	logErrorHandlerFunc := LogErrorHandle(handlerFunc)
+	logRequestHandlerFunc := LogRequestHandle(logErrorHandlerFunc)
+	protectDdosHandlerFunc := ProtectDdosHandle(logRequestHandlerFunc)
+	zeal.Handle(mux, urlPattern, protectDdosHandlerFunc)
+}
+
+func AddMyStackHandleRoute(mux *zeal.ServeMux) {
+	MyStackHandle(mux, "GET /stack",
+		func(r zeal.Response[[]models.Menu], p any, b any) error {
+			if rand.Float64() > 0.33 {
+				return fmt.Errorf("an error occurred")
+			} else {
+				return r.JSON(menus)
+			}
+		})
 }

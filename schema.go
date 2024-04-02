@@ -139,13 +139,13 @@ func getUrlSlugs(url url.URL) []string {
 	return strings.Split(path, "/")
 }
 
-type URLPathParamPlaceholder struct {
+type urlPathParamPlaceholder struct {
 	name             string
 	validationRegexp string
 }
 
-func getURLPathParamPlaceholder(urlSlug string) (URLPathParamPlaceholder, error) {
-	placeholder := URLPathParamPlaceholder{}
+func getURLPathParamPlaceholder(urlSlug string) (urlPathParamPlaceholder, error) {
+	placeholder := urlPathParamPlaceholder{}
 	if !strings.HasPrefix(urlSlug, "{") || !strings.HasSuffix(urlSlug, "}") {
 		return placeholder, fmt.Errorf("expected URL placeholder, received: %v", urlSlug)
 	}
