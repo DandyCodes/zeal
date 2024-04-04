@@ -222,59 +222,39 @@ However, routes defined this way will not be documented in the OpenAPI spec
 
 ## Middleware
 
-To add middleware such as logging, you can create your own wrapper around zeal.Handle
+To add middleware such as logging, you can create a middleware stack
 
 ```go
-func MyHandle[R, P, B any](
-    mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[R, P, B],
-) {
-    myHanlderFunc := func(r zeal.Response[R], p P, b B) error {
-        err := handlerFunc(r, p, b)
-        if err != nil {
-            log.Println(err)
-        }
-        return err
-    }
-    zeal.Handle(mux, urlPattern, myHanlderFunc)
+type loggingResponseWriter struct {
+    http.ResponseWriter
+    StatusCode int
 }
-```
 
-And define your route using your wrapper
+func (w *loggingResponseWriter) WriteHeader(code int) {
+    w.StatusCode = code
+    w.ResponseWriter.WriteHeader(code)
+}
 
-```go
-MyHandle(mux, "GET /errors_logged",
-    func(r zeal.Response[[]models.Menu], p any, b any) error {
-        if rand.Float64() < 0.33 {
-            return r.Error(http.StatusInternalServerError, "an error occurred")
-        } else {
-            return r.JSON(menus)
-        }
-    })
-```
-
----
-
-Or create a stack of middleware
-
-```go
-func LogErrorHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
+func LoggingMiddleware[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
     return func(r zeal.Response[R], p P, b B) error {
+        start := time.Now()
+
+        w := &loggingResponseWriter{ResponseWriter: r.ResponseWriter}
+        r.ResponseWriter = w
+
         err := next(r, p, b)
+
+        msg := fmt.Errorf(http.StatusText(w.StatusCode))
         if err != nil {
-            log.Println(err)
+            msg = err
         }
+
+        log.Println(r.Request.Method, r.Request.URL.Path, w.StatusCode, msg, time.Since(start))
         return err
     }
 }
 
-func LogRequestHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
-    return func(r zeal.Response[R], p P, b B) error {
-        log.Println(r.Request)
-        return next(r, p, b)
-    }
-}
-
-func AntiDdosHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
+func AntiDdosMiddleware[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
     return func(r zeal.Response[R], p P, b B) error {
         if rand.Float64() < 0.33 {
             return r.Error(http.StatusTeapot, "computer says no")
@@ -282,13 +262,16 @@ func AntiDdosHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFun
         return next(r, p, b)
     }
 }
+```
 
-func MyStackHandle[R, P, B any](
+Create a wrapper around zeal.Handle
+
+```go
+func MiddlewareHandle[R, P, B any](
     mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[R, P, B],
 ) {
-    logErrorHandlerFunc := LogErrorHandle(handlerFunc)
-    logRequestHandlerFunc := LogRequestHandle(logErrorHandlerFunc)
-    antiDdosHandlerFunc := AntiDdosHandle(logRequestHandlerFunc)
+    loggingHandlerFunc := LoggingMiddleware(handlerFunc)
+    antiDdosHandlerFunc := AntiDdosMiddleware(loggingHandlerFunc)
     zeal.Handle(mux, urlPattern, antiDdosHandlerFunc)
 }
 ```
@@ -296,7 +279,7 @@ func MyStackHandle[R, P, B any](
 And define your route using this wrapper
 
 ```go
-MyStackHandle(mux, "GET /stack",
+MiddlewareHandle(mux, "GET /middleware",
     func(r zeal.Response[[]models.Menu], p any, b any) error {
         if rand.Float64() < 0.33 {
             return r.Error(http.StatusInternalServerError, "an error occurred")

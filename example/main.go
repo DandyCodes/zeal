@@ -5,6 +5,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/DandyCodes/zeal"
 	"github.com/DandyCodes/zeal/example/models"
@@ -146,48 +147,36 @@ func DefineStandardRoute(mux *zeal.ServeMux) {
 	})
 }
 
-func MyHandle[R, P, B any](
-	mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[R, P, B],
-) {
-	myHanlderFunc := func(r zeal.Response[R], p P, b B) error {
-		err := handlerFunc(r, p, b)
-		if err != nil {
-			log.Println(err)
-		}
-		return err
-	}
-	zeal.Handle(mux, urlPattern, myHanlderFunc)
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	StatusCode int
 }
 
-func AddMyHandleRoute(mux *zeal.ServeMux) {
-	MyHandle(mux, "GET /errors_logged",
-		func(r zeal.Response[[]models.Menu], p any, b any) error {
-			if rand.Float64() < 0.33 {
-				return r.Error(http.StatusInternalServerError, "an error occurred")
-			} else {
-				return r.JSON(menus)
-			}
-		})
+func (w *loggingResponseWriter) WriteHeader(code int) {
+	w.StatusCode = code
+	w.ResponseWriter.WriteHeader(code)
 }
 
-func LogErrorHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
+func LoggingMiddleware[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
 	return func(r zeal.Response[R], p P, b B) error {
+		start := time.Now()
+
+		w := &loggingResponseWriter{ResponseWriter: r.ResponseWriter}
+		r.ResponseWriter = w
+
 		err := next(r, p, b)
+
+		msg := fmt.Errorf(http.StatusText(w.StatusCode))
 		if err != nil {
-			log.Println(err)
+			msg = err
 		}
+
+		log.Println(r.Request.Method, r.Request.URL.Path, w.StatusCode, msg, time.Since(start))
 		return err
 	}
 }
 
-func LogRequestHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
-	return func(r zeal.Response[R], p P, b B) error {
-		log.Println(r.Request)
-		return next(r, p, b)
-	}
-}
-
-func AntiDdosHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
+func AntiDdosMiddleware[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFunc[R, P, B] {
 	return func(r zeal.Response[R], p P, b B) error {
 		if rand.Float64() < 0.33 {
 			return r.Error(http.StatusTeapot, "computer says no")
@@ -196,17 +185,16 @@ func AntiDdosHandle[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.HandlerFun
 	}
 }
 
-func MyStackHandle[R, P, B any](
+func MiddlewareHandle[R, P, B any](
 	mux *zeal.ServeMux, urlPattern string, handlerFunc zeal.HandlerFunc[R, P, B],
 ) {
-	logErrorHandlerFunc := LogErrorHandle(handlerFunc)
-	logRequestHandlerFunc := LogRequestHandle(logErrorHandlerFunc)
-	antiDdosHandlerFunc := AntiDdosHandle(logRequestHandlerFunc)
+	loggingHandlerFunc := LoggingMiddleware(handlerFunc)
+	antiDdosHandlerFunc := AntiDdosMiddleware(loggingHandlerFunc)
 	zeal.Handle(mux, urlPattern, antiDdosHandlerFunc)
 }
 
-func AddMyStackHandleRoute(mux *zeal.ServeMux) {
-	MyStackHandle(mux, "GET /stack",
+func AddMiddlewareHandleRoute(mux *zeal.ServeMux) {
+	MiddlewareHandle(mux, "GET /middleware",
 		func(r zeal.Response[[]models.Menu], p any, b any) error {
 			if rand.Float64() < 0.33 {
 				return r.Error(http.StatusInternalServerError, "an error occurred")

@@ -19,14 +19,17 @@ func (r Response[T_Response]) Status(status int) error {
 
 func (r Response[T_Response]) Error(status int, errorMsg ...string) error {
 	status = ensureErrorCode(status)
-	msg := http.StatusText(status)
+
+	var msg string
 	if len(errorMsg) > 0 {
 		msg = errorMsg[0]
+	} else {
+		msg = http.StatusText(status)
 	}
 
 	http.Error(r.ResponseWriter, msg, status)
 
-	return fmt.Errorf("%v %v", status, msg)
+	return fmt.Errorf(msg)
 }
 
 func ensureErrorCode(status int) int {
