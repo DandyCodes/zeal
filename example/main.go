@@ -161,7 +161,7 @@ func LoggingMiddleware[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.Handler
 	return func(r zeal.Response[R], p P, b B) error {
 		start := time.Now()
 
-		w := &loggingResponseWriter{ResponseWriter: r.ResponseWriter}
+		w := &loggingResponseWriter{ResponseWriter: r.ResponseWriter, StatusCode: http.StatusOK}
 		r.ResponseWriter = w
 
 		err := next(r, p, b)

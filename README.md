@@ -1,6 +1,10 @@
-# Zeal
+<div align="center">
+    <div>&nbsp; &nbsp; &nbsp;<img width="150" height="150" src="./knight.png" alt="Logo"></div>
+    <h1 align="center"><b>Zeal</b></h1>
+    <p align="center">✨ A type-safe REST API framework for Go!</p>
+</div>
 
-A type-safe REST API framework for Go!
+## About
 
 Structs can be used to define and validate URL parameters, request bodies and response types.
 
@@ -197,7 +201,7 @@ If it is not passed an error code, it will respond with http.StatusInternalServe
 
 ## Standard Library Integration
 
-The standard library *http.Request and http.ResponseWriter can still be accessed in a zeal route
+The standard library *http.Request and http.ResponseWriter can still be accessed in a Zeal route
 
 ```go
 zeal.Handle(mux, "GET /",
@@ -239,7 +243,7 @@ func LoggingMiddleware[R, P, B any](next zeal.HandlerFunc[R, P, B]) zeal.Handler
     return func(r zeal.Response[R], p P, b B) error {
         start := time.Now()
 
-        w := &loggingResponseWriter{ResponseWriter: r.ResponseWriter}
+        w := &loggingResponseWriter{ResponseWriter: r.ResponseWriter, StatusCode: http.StatusOK}
         r.ResponseWriter = w
 
         err := next(r, p, b)
@@ -288,3 +292,7 @@ MiddlewareHandle(mux, "GET /middleware",
         }
     })
 ```
+
+###### Credits
+
+<a href="https://www.flaticon.com/free-icons/helmet" title="helmet icons">Helmet icons created by Freepik - Flaticon</a>
