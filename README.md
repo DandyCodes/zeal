@@ -43,9 +43,9 @@ func main() {
 
 ## Routes
 
-Routes handled by Zeal are automatically documented in the OpenAPI schema
+Routes handled by Zeal are automatically documented in the OpenAPI schema.
 
-Use ***zeal.Route*** to create a route and define a standard library http.HandlerFunc
+Use ***zeal.Route*** to create a route and define a standard library http.HandlerFunc:
 
 ```go
 zeal.Route[any](Mux).HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +62,7 @@ This route uses ***any*** as a type parameter for ***zeal.Route\[any\](Mux)*** w
 
 ## Responses
 
-Define a route schema struct and embed a ***zeal.RouteResponse***
+Define a route schema struct and embed a ***zeal.RouteResponse***:
 
 ```go
 type GetAnswer struct {
@@ -70,15 +70,15 @@ type GetAnswer struct {
 }
 ```
 
-This route will respond with an integer, so ***int*** is passed as a type parameter
+This route will respond with an integer, so ***int*** is passed as a type parameter.
 
-Create the route and pass ***GetAnswer*** as a type parameter to ***zeal.Route***
+Create the route and pass ***GetAnswer*** as a type parameter to ***zeal.Route***:
 
 ```go
 var getAnswer = zeal.Route[GetAnswer](Mux)
 ```
 
-Then use the ***getAnswer*** route to create the handler function
+Then use the ***getAnswer*** route to create the handler function:
 
 ```go
 getAnswer.HandleFunc("GET /answer", func(w http.ResponseWriter, r *http.Request) {
@@ -86,13 +86,13 @@ getAnswer.HandleFunc("GET /answer", func(w http.ResponseWriter, r *http.Request)
 })
 ```
 
-The ***Route.Response*** method will only accept data of the declared response type
+The ***Route.Response*** method will only accept data of the declared response type.
 
 ---
 
-You can also define complex response types
+You can also define complex response types.
 
-Here is some example data
+Here is some example data:
 
 ```go
 var foodMenu = models.Menu{
@@ -112,7 +112,7 @@ var drinksMenu = models.Menu{
 }
 ```
 
-The route below responds with a slice of menus, so ***[]models.Menu*** is passed to ***zeal.RouteResponse***
+The route below responds with a slice of menus, so ***[]models.Menu*** is passed to ***zeal.RouteResponse***:
 
 ```go
 var menus = []models.Menu{foodMenu, drinksMenu}
@@ -126,15 +126,15 @@ getMenus.HandleFunc("GET /menus", func(w http.ResponseWriter, r *http.Request) {
 })
 ```
 
-The ***Route.Response*** method can be passed an optional HTTP status code (200 OK is sent by default)
+The ***Route.Response*** method can be passed an optional HTTP status code (200 OK is sent by default).
 
 ## URL Parameters
 
-Embed ***zeal.RouteQuery*** in your route definition to define query parameters
+Embed ***zeal.RouteQuery*** in your route definition to define query parameters.
 
-Embed ***zeal.RoutePath*** to define path parameters
+Embed ***zeal.RoutePath*** to define path parameters.
 
-Parameter struct fields must begin with a capital letter to be accessed in the route - for example, 'Quiet'
+Parameter struct fields must begin with a capital letter to be accessed in the route - for example, 'Quiet':
 
 ```go
 type GetMenu struct {
@@ -162,13 +162,13 @@ getMenu.HandleFunc("GET /menus/{ID}", func(w http.ResponseWriter, r *http.Reques
 })
 ```
 
-Parameters are converted to their declared type
+Parameters are converted to their declared type.
 
-If this fails, http.StatusUnprocessableEntity 422 is sent immediately
+If this fails, http.StatusUnprocessableEntity 422 is sent immediately.
 
 ## Error Handling
 
-Use the ***Handle*** method to create a handler function which returns an error
+Use the ***Handle*** method to create a handler function which returns an error:
 
 ```go
 type GetMenu struct {
@@ -197,7 +197,7 @@ getMenu.Handle("GET /menus/err/{ID}", func(w http.ResponseWriter, r *http.Reques
 
 ## Request Bodies
 
-Embed ***zeal.RouteBody*** to define a request body
+Embed ***zeal.RouteBody*** to define a request body:
 
 ```go
 type PutItem struct {
@@ -229,13 +229,13 @@ putItem.Handle("PUT /items", func(w http.ResponseWriter, r *http.Request) error 
 })
 ```
 
-If the body cannot be converted to its declared type, http.StatusUnprocessableEntity 422 is sent immediately
+If the body cannot be converted to its declared type, http.StatusUnprocessableEntity 422 is sent immediately.
 
-Body struct fields must be capitalized to be accessed in the route
+Body struct fields must be capitalized to be accessed in the route.
 
 ## Misc
 
-Route handler functions can be defined in an outer scope
+Route handler functions can be defined in an outer scope:
 
 ```go
 var Mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
@@ -271,11 +271,9 @@ func HandlePostItem(w http.ResponseWriter, r *http.Request) error {
 }
 ```
 
-The ***Status*** method responds with a given HTTP status code
+The ***Status*** method responds with a given HTTP status code.
 
-The ***Error*** method responds with a given HTTP status code and an optional error message
-
-It must be passed an error code (4xx or 5xx), or else it will respond with http.StatusInternalServerError 500 instead
+The ***Error*** method responds with a given HTTP status code and an optional error message. It must be passed an error code (4xx or 5xx), or else it will respond with http.StatusInternalServerError 500 instead.
 
 ###### Credits
 
