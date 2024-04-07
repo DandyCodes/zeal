@@ -12,7 +12,7 @@ type RouteQuery[T_Query any] struct {
 	Request *http.Request
 }
 
-func (p RouteQuery[T_Query]) Query() T_Query {
+func (q RouteQuery[T_Query]) Query() T_Query {
 	var query T_Query
 	queryType := reflect.TypeOf(query)
 	if queryType == nil {
@@ -25,7 +25,7 @@ func (p RouteQuery[T_Query]) Query() T_Query {
 		field := queryType.Field(i)
 		structField := newQueryStruct.FieldByName(field.Name)
 		if structField.CanSet() {
-			rawParamValue := p.Request.URL.Query().Get(field.Name)
+			rawParamValue := q.Request.URL.Query().Get(field.Name)
 			paramValue, _ := parsePrimitive(rawParamValue, field.Type)
 			structField.Set(reflect.ValueOf(paramValue))
 		}
@@ -36,7 +36,7 @@ func (p RouteQuery[T_Query]) Query() T_Query {
 	return query
 }
 
-func (p RouteQuery[T_Query]) Validate() (T_Query, error) {
+func (q RouteQuery[T_Query]) Validate() (T_Query, error) {
 	var query T_Query
 	queryType := reflect.TypeOf(query)
 	if queryType == nil {
@@ -51,7 +51,7 @@ func (p RouteQuery[T_Query]) Validate() (T_Query, error) {
 		field := queryType.Field(i)
 		structField := newQueryStruct.FieldByName(field.Name)
 		if structField.CanSet() {
-			rawParamValue := p.Request.URL.Query().Get(field.Name)
+			rawParamValue := q.Request.URL.Query().Get(field.Name)
 			paramValue, err := parsePrimitive(rawParamValue, field.Type)
 			if err != nil {
 				error = err
