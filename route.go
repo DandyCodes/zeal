@@ -8,50 +8,67 @@ import (
 	"reflect"
 )
 
-type RouteQuery[T_Query any] struct {
+type RouteMux[T_Route any] struct {
+	*ServeMux
+	Route          T_Route
+	ResponseWriter *http.ResponseWriter
+}
+
+func Route[T_Route any](mux *ServeMux) *RouteMux[T_Route] {
+	var route T_Route
+	return &RouteMux[T_Route]{ServeMux: mux, Route: route}
+}
+
+type RouteParams[T_Params any] struct {
 	Request *http.Request
 }
 
-func (q RouteQuery[T_Query]) Query() T_Query {
-	var query T_Query
-	queryType := reflect.TypeOf(query)
-	if queryType == nil {
-		return query
+func (p RouteParams[T_Params]) Params() T_Params {
+	var params T_Params
+	paramsType := reflect.TypeOf(params)
+	if paramsType == nil {
+		return params
 	}
 
-	newQueryStruct := reflect.New(queryType).Elem()
+	paramsValue := reflect.New(paramsType).Elem()
 
-	for i := 0; i < queryType.NumField(); i++ {
-		field := queryType.Field(i)
-		structField := newQueryStruct.FieldByName(field.Name)
+	for i := 0; i < paramsType.NumField(); i++ {
+		field := paramsType.Field(i)
+		structField := paramsValue.FieldByName(field.Name)
 		if structField.CanSet() {
-			rawParamValue := q.Request.URL.Query().Get(field.Name)
+			rawParamValue := p.Request.PathValue(field.Name)
+			if rawParamValue == "" {
+				rawParamValue = p.Request.URL.Query().Get(field.Name)
+			}
 			paramValue, _ := parsePrimitive(rawParamValue, field.Type)
 			structField.Set(reflect.ValueOf(paramValue))
 		}
 	}
 
-	query = newQueryStruct.Interface().(T_Query)
+	params = paramsValue.Interface().(T_Params)
 
-	return query
+	return params
 }
 
-func (q RouteQuery[T_Query]) Validate() (T_Query, error) {
-	var query T_Query
-	queryType := reflect.TypeOf(query)
-	if queryType == nil {
-		return query, nil
+func (p RouteParams[T_Params]) Validate() (T_Params, error) {
+	var params T_Params
+	paramsType := reflect.TypeOf(params)
+	if paramsType == nil {
+		return params, nil
 	}
 
-	newQueryStruct := reflect.New(queryType).Elem()
+	paramsValue := reflect.New(paramsType).Elem()
 
 	var error error
 
-	for i := 0; i < queryType.NumField(); i++ {
-		field := queryType.Field(i)
-		structField := newQueryStruct.FieldByName(field.Name)
+	for i := 0; i < paramsType.NumField(); i++ {
+		field := paramsType.Field(i)
+		structField := paramsValue.FieldByName(field.Name)
 		if structField.CanSet() {
-			rawParamValue := q.Request.URL.Query().Get(field.Name)
+			rawParamValue := p.Request.PathValue(field.Name)
+			if rawParamValue == "" {
+				rawParamValue = p.Request.URL.Query().Get(field.Name)
+			}
 			paramValue, err := parsePrimitive(rawParamValue, field.Type)
 			if err != nil {
 				error = err
@@ -62,68 +79,9 @@ func (q RouteQuery[T_Query]) Validate() (T_Query, error) {
 		}
 	}
 
-	query = newQueryStruct.Interface().(T_Query)
+	params = paramsValue.Interface().(T_Params)
 
-	return query, error
-}
-
-type RoutePath[T_Path any] struct {
-	Request *http.Request
-}
-
-func (p RoutePath[T_Path]) Path() T_Path {
-	var path T_Path
-	pathType := reflect.TypeOf(path)
-	if pathType == nil {
-		return path
-	}
-
-	newPathStruct := reflect.New(pathType).Elem()
-
-	for i := 0; i < pathType.NumField(); i++ {
-		field := pathType.Field(i)
-		structField := newPathStruct.FieldByName(field.Name)
-		if structField.CanSet() {
-			rawParamValue := p.Request.PathValue(field.Name)
-			paramValue, _ := parsePrimitive(rawParamValue, field.Type)
-			structField.Set(reflect.ValueOf(paramValue))
-		}
-	}
-
-	path = newPathStruct.Interface().(T_Path)
-
-	return path
-}
-
-func (p RoutePath[T_Path]) Validate() (T_Path, error) {
-	var path T_Path
-	pathType := reflect.TypeOf(path)
-	if pathType == nil {
-		return path, nil
-	}
-
-	newPathStruct := reflect.New(pathType).Elem()
-
-	var error error
-
-	for i := 0; i < pathType.NumField(); i++ {
-		field := pathType.Field(i)
-		structField := newPathStruct.FieldByName(field.Name)
-		if structField.CanSet() {
-			rawParamValue := p.Request.PathValue(field.Name)
-			paramValue, err := parsePrimitive(rawParamValue, field.Type)
-			if err != nil {
-				error = err
-				continue
-			}
-
-			structField.Set(reflect.ValueOf(paramValue))
-		}
-	}
-
-	path = newPathStruct.Interface().(T_Path)
-
-	return path, error
+	return params, error
 }
 
 type RouteBody[T_Body any] struct {
