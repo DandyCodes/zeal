@@ -1,7 +1,6 @@
 package zeal
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/a-h/rest"
@@ -14,24 +13,25 @@ type ServeMux struct {
 	Api *rest.API
 }
 
-func NewServeMux(apiName ...string) *ServeMux {
+func NewServeMux(mux *http.ServeMux, apiName ...string) *ServeMux {
 	name := "API"
 	if len(apiName) > 0 {
 		name = apiName[0]
 	}
-	return &ServeMux{ServeMux: http.NewServeMux(), Api: rest.NewAPI(name)}
+	return &ServeMux{ServeMux: mux, Api: rest.NewAPI(name)}
 }
 
-type SpecOptions struct {
+type OpenAPISpecOptions struct {
+	ZealMux       *ServeMux
 	Version       string
 	Description   string
 	StripPkgPaths []string
 }
 
-func (mux *ServeMux) CreateSpec(options SpecOptions) (*openapi3.T, error) {
-	mux.Api.StripPkgPaths = options.StripPkgPaths
+func CreateOpenAPISpec(options OpenAPISpecOptions) (*openapi3.T, error) {
+	options.ZealMux.Api.StripPkgPaths = options.StripPkgPaths
 
-	spec, err := mux.Api.Spec()
+	spec, err := options.ZealMux.Api.Spec()
 	if err != nil {
 		return nil, err
 	}
@@ -74,30 +74,7 @@ func removeDefaultResponses(operation *openapi3.Operation) {
 	})
 }
 
-type ServeOptions struct {
-	Port           int
-	Spec           *openapi3.T
-	ServeSwaggerUI bool
-	SwaggerPattern string
-}
-
-func (mux *ServeMux) ListenAndServe(options ServeOptions) error {
-	if options.ServeSwaggerUI {
-		if err := mux.ServeSwaggerUI(options.Spec, "GET "+options.SwaggerPattern); err != nil {
-			return err
-		}
-	}
-
-	fmt.Printf("Listening on port %v...\n", options.Port)
-	if options.ServeSwaggerUI {
-		fmt.Printf("Visit http://localhost:%v%v to see API definitions\n", options.Port, options.SwaggerPattern)
-	}
-	http.ListenAndServe(fmt.Sprintf(":%v", options.Port), mux)
-
-	return nil
-}
-
-func (mux *ServeMux) ServeSwaggerUI(spec *openapi3.T, path string) error {
+func ServeSwaggerUI(mux *ServeMux, spec *openapi3.T, path string) error {
 	ui, err := swaggerui.New(spec)
 	if err != nil {
 		return err
