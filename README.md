@@ -214,6 +214,8 @@ Struct fields must be capitalized to be accessed in the route - for example, 'Pr
 
 Use the ***HandleErr*** method to create a handler function which returns an error.
 
+Use the ***HandleErr*** method to create a handler function which returns an error.
+
 Route handler functions can be defined in an outer scope:
 
 ```go
