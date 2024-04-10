@@ -6,16 +6,18 @@
 
 ## About
 
-Use structs to define and validate URL parameters, request bodies and responses.
+Define structs to validate URL parameters, request bodies and responses.
 
 URL parameters and request bodies are automatically converted to their declared type.
 
-Automatically generates fully typed OpenAPI 3 schema documentation using [REST](https://github.com/a-h/rest) and serves it with SwaggerUI.
+Uses the standard library http.HandlerFunc for maximum compatibility.
+
+Automatically generates fully typed OpenAPI 3 spec documentation using [REST](https://github.com/a-h/rest) and serves it with SwaggerUI.
 
 ## Server
 
 ```go
-var Mux = zeal.NewServeMux(http.NewServeMux(), "Example API") 
+var Mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
 
 func main() {
     addRoutes(Mux)
@@ -43,9 +45,28 @@ func main() {
 
 ## Routes
 
-Routes handled by Zeal are automatically documented in the OpenAPI schema.
+A standard library http.HandlerFunc is passed to a zeal route.
 
-Use ***zeal.Route*** to create a route and define a standard library http.HandlerFunc:
+Create a route definition struct as pass it to ***zeal.Route*** as a type parameter:
+
+```go
+type PostRoot struct{}
+var postRoot = zeal.Route[PostRoot](Mux)
+postRoot.HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
+    fmt.Println("Hello, world!")
+    w.WriteHeader(http.StatusOK)
+})
+```
+
+This route uses an empty struct which means it has no:
+
+* URL parameters
+* Request body
+* Response type
+
+Routes handled by Zeal are automatically documented in the OpenAPI spec.
+
+Using ***any*** in place of an empty struct accomplishes the same outcome:
 
 ```go
 zeal.Route[any](Mux).HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
@@ -54,33 +75,13 @@ zeal.Route[any](Mux).HandleFunc("POST /", func(w http.ResponseWriter, r *http.Re
 })
 ```
 
-This route uses ***any*** as a type parameter for ***zeal.Route\[any\](Mux)*** which means the route has no:
-
-* URL parameters
-* Request body
-* Response type
-
 ## Responses
 
-Define a route schema struct and embed a ***zeal.RouteResponse***:
+Embed ***zeal.RouteResponse*** in your route definition, passing it the response type as a type parameter:
 
 ```go
-type GetAnswer struct {
-    zeal.RouteResponse[int]
-}
-```
-
-This route will respond with an integer, so ***int*** is passed as a type parameter.
-
-Create the route and pass ***GetAnswer*** as a type parameter to ***zeal.Route***:
-
-```go
+type GetAnswer struct{ zeal.RouteResponse[int] }
 var getAnswer = zeal.Route[GetAnswer](Mux)
-```
-
-Then use the ***getAnswer*** route to create the handler function:
-
-```go
 getAnswer.HandleFunc("GET /answer", func(w http.ResponseWriter, r *http.Request) {
     getAnswer.Route.Response(42)
 })
@@ -90,7 +91,7 @@ The ***Route.Response*** method will only accept data of the declared response t
 
 ---
 
-You can also define complex response types.
+A ***zeal.RouteResponse*** can use complex types.
 
 Here is some example data:
 
@@ -112,7 +113,7 @@ var drinksMenu = models.Menu{
 }
 ```
 
-The route below responds with a slice of menus, so ***[]models.Menu*** is passed to ***zeal.RouteResponse***:
+This route responds with a slice of menus:
 
 ```go
 var menus = []models.Menu{foodMenu, drinksMenu}
@@ -130,26 +131,26 @@ The ***Route.Response*** method can be passed an optional HTTP status code (200 
 
 ## URL Parameters
 
-Embed ***zeal.RouteQuery*** in your route definition to define query parameters.
+Embed ***zeal.RouteParams*** in your route definition, passing it the params type as a type parameter.
 
-Embed ***zeal.RoutePath*** to define path parameters.
-
-Parameter struct fields must begin with a capital letter to be accessed in the route - for example, 'Quiet':
+The params struct can be anonymous and defined in-line:
 
 ```go
 type GetMenu struct {
-    zeal.RouteQuery[struct{ Quiet bool }]
-    zeal.RoutePath[struct{ ID int }]
+    zeal.RouteParams[struct {
+        ID    int
+        Quiet bool
+    }]
     zeal.RouteResponse[models.Menu]
 }
 var getMenu = zeal.Route[GetMenu](Mux)
 getMenu.HandleFunc("GET /menus/{ID}", func(w http.ResponseWriter, r *http.Request) {
-    quiet := getMenu.Route.Query().Quiet
+    quiet := getMenu.Route.Params().Quiet
     if !quiet {
         fmt.Println("Getting menus")
     }
 
-    ID := getMenu.Route.Path().ID
+    ID := getMenu.Route.Params().ID
     for i := 0; i < len(menus); i++ {
         menu := menus[i]
         if menu.ID == ID {
@@ -162,42 +163,15 @@ getMenu.HandleFunc("GET /menus/{ID}", func(w http.ResponseWriter, r *http.Reques
 })
 ```
 
-Parameters are converted to their declared type.
+Params found in the URL pattern (for example, 'ID' in '/menus/{ID}') will be defined as path params - all others will be query params.
 
-If this fails, http.StatusUnprocessableEntity 422 is sent immediately.
+Params are converted to their declared type. If this fails, http.StatusUnprocessableEntity 422 is sent immediately.
 
-## Error Handling
-
-Use the ***Handle*** method to create a handler function which returns an error:
-
-```go
-type GetMenu struct {
-    zeal.RouteQuery[struct{ Quiet bool }]
-    zeal.RoutePath[struct{ ID int }]
-    zeal.RouteResponse[models.Menu]
-}
-var getMenu = zeal.Route[GetMenu](Mux)
-getMenu.Handle("GET /menus/err/{ID}", func(w http.ResponseWriter, r *http.Request) error {
-    quiet := getMenu.Route.Query().Quiet
-    if !quiet {
-        fmt.Println("Getting menus")
-    }
-
-    ID := getMenu.Route.Path().ID
-    for i := 0; i < len(menus); i++ {
-        menu := menus[i]
-        if menu.ID == ID {
-            return getMenu.Route.Response(menu)
-        }
-    }
-
-    return getMenu.Error(http.StatusNotFound)
-})
-```
+Struct fields must be capitalized to be accessed in the route - for example, 'Quiet'.
 
 ## Request Bodies
 
-Embed ***zeal.RouteBody*** to define a request body:
+Embed ***zeal.RouteBody*** in your route definition, passing it the body type as a type parameter:
 
 ```go
 type PutItem struct {
@@ -205,10 +179,11 @@ type PutItem struct {
     zeal.RouteResponse[models.Item]
 }
 var putItem = zeal.Route[PutItem](Mux)
-putItem.Handle("PUT /items", func(w http.ResponseWriter, r *http.Request) error {
+putItem.HandleFunc("PUT /items", func(w http.ResponseWriter, r *http.Request) {
     item := putItem.Route.Body()
     if item.Price < 0 {
-        return putItem.Error(http.StatusBadRequest, "Price cannot be negative")
+        putItem.Error(http.StatusBadRequest, "Price cannot be negative")
+        return
     }
 
     for i := range menus {
@@ -219,21 +194,24 @@ putItem.Handle("PUT /items", func(w http.ResponseWriter, r *http.Request) error 
 
             menus[i].Items[j].Price = item.Price
             updatedItem := menus[i].Items[j]
-            return putItem.Route.Response(updatedItem)
+            putItem.Route.Response(updatedItem)
+            return
         }
     }
 
     menus[1].Items = append(menus[1].Items, item)
     updatedItem := menus[1].Items[len(menus[1].Items)-1]
-    return putItem.Route.Response(updatedItem, http.StatusCreated)
+    putItem.Route.Response(updatedItem, http.StatusCreated)
 })
 ```
 
-If the body cannot be converted to its declared type, http.StatusUnprocessableEntity 422 is sent immediately.
+The body is converted to its declared type. If this fails, http.StatusUnprocessableEntity 422 is sent immediately.
 
-Body struct fields must be capitalized to be accessed in the route.
+Struct fields must be capitalized to be accessed in the route - for example, 'Price'.
 
 ## Misc
+
+Use the ***HandleErr*** method to create a handler function which returns an error.
 
 Route handler functions can be defined in an outer scope:
 
@@ -241,14 +219,14 @@ Route handler functions can be defined in an outer scope:
 var Mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
 
 type PostItem struct {
-    zeal.RoutePath[struct{ MenuID int }]
+    zeal.RouteParams[struct{ MenuID int }]
     zeal.RouteBody[models.Item]
 }
 
 var postItem = zeal.Route[PostItem](Mux)
 
-func addOuterScopeRoutes() {
-    postItem.Handle("POST /items/{MenuID}", HandlePostItem)
+func addErrRoute() {
+    postItem.HandleErr("POST /items/{MenuID}", HandlePostItem)
 }
 
 func HandlePostItem(w http.ResponseWriter, r *http.Request) error {
@@ -257,7 +235,7 @@ func HandlePostItem(w http.ResponseWriter, r *http.Request) error {
         return postItem.Error(http.StatusBadRequest, "Price cannot be negative")
     }
 
-    MenuID := postItem.Route.Path().MenuID
+    MenuID := postItem.Route.Params().MenuID
     for i := range menus {
         if menus[i].ID != MenuID {
             continue

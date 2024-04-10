@@ -41,7 +41,7 @@ func (mux *RouteMux[T_Route]) HandleFunc(pattern string, handlerFunc http.Handle
 
 type HandlerFunc func(http.ResponseWriter, *http.Request) error
 
-func (mux *RouteMux[T_Route]) Handle(pattern string, handlerFunc HandlerFunc) {
+func (mux *RouteMux[T_Route]) HandleErr(pattern string, handlerFunc HandlerFunc) {
 	muxType := reflect.TypeOf(mux).Elem()
 	routeStructField, ok := muxType.FieldByName("Route")
 	if ok {
@@ -107,7 +107,7 @@ func newRoute[T_Route any](routeRef reflect.Value, w http.ResponseWriter, r *htt
 		return reflect.ValueOf(struct{}{}).Interface().(T_Route), nil
 	}
 
-	paramsTypeName := getTypeName(HasParams[any]{})
+	paramsTypeName := getTypeName(RouteParams[any]{})
 	paramsValue := routeRef.FieldByName(paramsTypeName)
 	if paramsValue.IsValid() {
 		requestValue := paramsValue.FieldByName("Request")
@@ -123,7 +123,7 @@ func newRoute[T_Route any](routeRef reflect.Value, w http.ResponseWriter, r *htt
 		}
 	}
 
-	bodyTypeName := getTypeName(HasBody[any]{})
+	bodyTypeName := getTypeName(RouteBody[any]{})
 	bodyValue := routeRef.FieldByName(bodyTypeName)
 	if bodyValue.IsValid() {
 		requestValue := bodyValue.FieldByName("Request")
@@ -139,7 +139,7 @@ func newRoute[T_Route any](routeRef reflect.Value, w http.ResponseWriter, r *htt
 		}
 	}
 
-	responseTypeName := getTypeName(HasResponse[any]{})
+	responseTypeName := getTypeName(RouteResponse[any]{})
 	responseValue := routeRef.FieldByName(responseTypeName)
 	if responseValue.IsValid() {
 		responseWriterValue := responseValue.FieldByName("ResponseWriter")
