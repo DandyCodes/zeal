@@ -107,7 +107,7 @@ func newRoute[T_Route any](routeRef reflect.Value, w http.ResponseWriter, r *htt
 		return reflect.ValueOf(struct{}{}).Interface().(T_Route), nil
 	}
 
-	paramsTypeName := getTypeName(RouteParams[any]{})
+	paramsTypeName := getTypeName(HasParams[any]{})
 	paramsValue := routeRef.FieldByName(paramsTypeName)
 	if paramsValue.IsValid() {
 		requestValue := paramsValue.FieldByName("Request")
@@ -123,7 +123,7 @@ func newRoute[T_Route any](routeRef reflect.Value, w http.ResponseWriter, r *htt
 		}
 	}
 
-	bodyTypeName := getTypeName(RouteBody[any]{})
+	bodyTypeName := getTypeName(HasBody[any]{})
 	bodyValue := routeRef.FieldByName(bodyTypeName)
 	if bodyValue.IsValid() {
 		requestValue := bodyValue.FieldByName("Request")
@@ -139,7 +139,7 @@ func newRoute[T_Route any](routeRef reflect.Value, w http.ResponseWriter, r *htt
 		}
 	}
 
-	responseTypeName := getTypeName(RouteResponse[any]{})
+	responseTypeName := getTypeName(HasResponse[any]{})
 	responseValue := routeRef.FieldByName(responseTypeName)
 	if responseValue.IsValid() {
 		responseWriterValue := responseValue.FieldByName("ResponseWriter")

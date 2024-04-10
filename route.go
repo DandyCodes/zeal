@@ -19,11 +19,11 @@ func Route[T_Route any](mux *ServeMux) *RouteMux[T_Route] {
 	return &RouteMux[T_Route]{ServeMux: mux, Route: route}
 }
 
-type RouteParams[T_Params any] struct {
+type HasParams[T_Params any] struct {
 	Request *http.Request
 }
 
-func (p RouteParams[T_Params]) Params() T_Params {
+func (p HasParams[T_Params]) Params() T_Params {
 	var params T_Params
 	paramsType := reflect.TypeOf(params)
 	if paramsType == nil {
@@ -50,7 +50,7 @@ func (p RouteParams[T_Params]) Params() T_Params {
 	return params
 }
 
-func (p RouteParams[T_Params]) Validate() (T_Params, error) {
+func (p HasParams[T_Params]) Validate() (T_Params, error) {
 	var params T_Params
 	paramsType := reflect.TypeOf(params)
 	if paramsType == nil {
@@ -84,19 +84,19 @@ func (p RouteParams[T_Params]) Validate() (T_Params, error) {
 	return params, error
 }
 
-type RouteBody[T_Body any] struct {
+type HasBody[T_Body any] struct {
 	ResponseWriter http.ResponseWriter
 	Request        *http.Request
 }
 
-func (b RouteBody[T_Body]) Body() T_Body {
+func (b HasBody[T_Body]) Body() T_Body {
 	var body T_Body
 	defer b.Request.Body.Close()
 	json.NewDecoder(b.Request.Body).Decode(&body)
 	return body
 }
 
-func (b RouteBody[T_Body]) Validate() (T_Body, error) {
+func (b HasBody[T_Body]) Validate() (T_Body, error) {
 	var body T_Body
 	bodyType := reflect.TypeOf(body)
 	if bodyType == nil {
@@ -122,11 +122,11 @@ func (b RouteBody[T_Body]) Validate() (T_Body, error) {
 	return body, nil
 }
 
-type RouteResponse[T_Response any] struct {
+type HasResponse[T_Response any] struct {
 	ResponseWriter http.ResponseWriter
 }
 
-func (r RouteResponse[T_Response]) Response(data T_Response, status ...int) error {
+func (r HasResponse[T_Response]) Response(data T_Response, status ...int) error {
 	r.ResponseWriter.Header().Add("Content-Type", "application/json")
 
 	if len(status) > 0 {

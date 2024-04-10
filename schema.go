@@ -22,7 +22,7 @@ func registerRoute(mux *ServeMux, pattern string, routeStructField reflect.Struc
 		return
 	}
 
-	paramsTypeName := getTypeName(RouteParams[any]{})
+	paramsTypeName := getTypeName(HasParams[any]{})
 	paramsField, ok := routeStructField.Type.FieldByName(paramsTypeName)
 	if ok {
 		method, ok := paramsField.Type.MethodByName("Params")
@@ -33,7 +33,7 @@ func registerRoute(mux *ServeMux, pattern string, routeStructField reflect.Struc
 		}
 	}
 
-	bodyTypeName := getTypeName(RouteBody[any]{})
+	bodyTypeName := getTypeName(HasBody[any]{})
 	bodyField, ok := routeStructField.Type.FieldByName(bodyTypeName)
 	if ok {
 		method, ok := bodyField.Type.MethodByName("Body")
@@ -42,7 +42,7 @@ func registerRoute(mux *ServeMux, pattern string, routeStructField reflect.Struc
 		}
 	}
 
-	responseTypeName := getTypeName(RouteResponse[any]{})
+	responseTypeName := getTypeName(HasResponse[any]{})
 	responseField, ok := routeStructField.Type.FieldByName(responseTypeName)
 	if ok {
 		method, ok := responseField.Type.MethodByName("Response")
