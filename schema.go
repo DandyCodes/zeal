@@ -22,42 +22,30 @@ func registerRoute(mux *ServeMux, pattern string, routeStructField reflect.Struc
 		return
 	}
 
-	queryTypeName := getTypeName(RouteQuery[any]{})
-	queryStructField, ok := routeStructField.Type.FieldByName(queryTypeName)
+	paramsTypeName := getTypeName(HasParams[any]{})
+	paramsField, ok := routeStructField.Type.FieldByName(paramsTypeName)
 	if ok {
-		method, ok := queryStructField.Type.MethodByName("Query")
+		method, ok := paramsField.Type.MethodByName("Params")
 		if ok {
-			if err := registerQuery(route, method.Type.Out(0)); err != nil {
-				fmt.Println(err)
-			}
-
-		}
-	}
-
-	pathTypeName := getTypeName(RoutePath[any]{})
-	pathStructField, ok := routeStructField.Type.FieldByName(pathTypeName)
-	if ok {
-		method, ok := pathStructField.Type.MethodByName("Path")
-		if ok {
-			if err := registerPath(route, pattern, method.Type.Out(0)); err != nil {
+			if err := registerParams(route, pattern, method.Type.Out(0)); err != nil {
 				fmt.Println(err)
 			}
 		}
 	}
 
-	bodyTypeName := getTypeName(RouteBody[any]{})
-	bodyStructField, ok := routeStructField.Type.FieldByName(bodyTypeName)
+	bodyTypeName := getTypeName(HasBody[any]{})
+	bodyField, ok := routeStructField.Type.FieldByName(bodyTypeName)
 	if ok {
-		method, ok := bodyStructField.Type.MethodByName("Body")
+		method, ok := bodyField.Type.MethodByName("Body")
 		if ok {
 			registerBody(route, method.Type.Out(0))
 		}
 	}
 
-	responseTypeName := getTypeName(RouteResponse[any]{})
-	responseStructField, ok := routeStructField.Type.FieldByName(responseTypeName)
+	responseTypeName := getTypeName(HasResponse[any]{})
+	responseField, ok := routeStructField.Type.FieldByName(responseTypeName)
 	if ok {
-		method, ok := responseStructField.Type.MethodByName("Response")
+		method, ok := responseField.Type.MethodByName("Response")
 		if ok {
 			registerResponse(route, method.Type.In(1))
 		}
@@ -100,16 +88,30 @@ func getRoute(pattern string, mux *ServeMux) (*rest.Route, error) {
 	return route, nil
 }
 
-func registerQuery(route *rest.Route, queryType reflect.Type) error {
-	if queryType == nil {
+func registerParams(route *rest.Route, pattern string, paramsType reflect.Type) error {
+	if paramsType == nil {
 		return nil
 	}
 
-	for i := 0; i < queryType.NumField(); i++ {
-		field := queryType.Field(i)
+	pathParams, err := getPathParams(pattern)
+	if err != nil {
+		return err
+	}
+
+	for i := 0; i < paramsType.NumField(); i++ {
+		field := paramsType.Field(i)
 		primitiveSchemaType, err := getPrimitiveSchemaType(field.Type.Kind())
 		if err != nil {
 			return err
+		}
+
+		pathParam, isPathParam := pathParams[field.Name]
+		if isPathParam {
+			route.HasPathParameter(
+				field.Name,
+				rest.PathParam{Type: primitiveSchemaType, Regexp: pathParam.Regexp},
+			)
+			continue
 		}
 
 		route.HasQueryParameter(
@@ -125,54 +127,6 @@ func registerQuery(route *rest.Route, queryType reflect.Type) error {
 	return nil
 }
 
-func getPrimitiveSchemaType(kind reflect.Kind) (rest.PrimitiveType, error) {
-	switch kind {
-	case reflect.Bool:
-		return rest.PrimitiveTypeBool, nil
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return rest.PrimitiveTypeInteger, nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return rest.PrimitiveTypeInteger, nil
-	case reflect.Float32, reflect.Float64:
-		return rest.PrimitiveTypeFloat64, nil
-	case reflect.String:
-		return rest.PrimitiveTypeString, nil
-	default:
-		return "", fmt.Errorf("expected primitive kind, received: %v", kind)
-	}
-}
-
-func registerPath(route *rest.Route, pattern string, pathType reflect.Type) error {
-	if pathType == nil {
-		return nil
-	}
-
-	pathParams, err := getPathParams(pattern)
-	if err != nil {
-		return err
-	}
-
-	for i := 0; i < pathType.NumField(); i++ {
-		field := pathType.Field(i)
-		primitiveSchemaType, err := getPrimitiveSchemaType(field.Type.Kind())
-		if err != nil {
-			return err
-		}
-
-		pathParam, ok := pathParams[field.Name]
-		if !ok {
-			return fmt.Errorf("path parameter %v not found in pattern", field.Name)
-		}
-
-		route.HasPathParameter(
-			field.Name,
-			rest.PathParam{Type: primitiveSchemaType, Regexp: pathParam.Regexp},
-		)
-	}
-
-	return nil
-
-}
 func getPathParams(pattern string) (map[string]rest.PathParam, error) {
 	url, err := url.Parse(pattern)
 	if err != nil {
@@ -221,6 +175,23 @@ func getURLPathParamPlaceholder(urlSlug string) (urlPathParamPlaceholder, error)
 	}
 
 	return placeholder, nil
+}
+
+func getPrimitiveSchemaType(kind reflect.Kind) (rest.PrimitiveType, error) {
+	switch kind {
+	case reflect.Bool:
+		return rest.PrimitiveTypeBool, nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return rest.PrimitiveTypeInteger, nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return rest.PrimitiveTypeInteger, nil
+	case reflect.Float32, reflect.Float64:
+		return rest.PrimitiveTypeFloat64, nil
+	case reflect.String:
+		return rest.PrimitiveTypeString, nil
+	default:
+		return "", fmt.Errorf("expected primitive kind, received: %v", kind)
+	}
 }
 
 func registerBody(route *rest.Route, bodyType reflect.Type) {

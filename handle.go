@@ -8,17 +8,6 @@ import (
 	"strings"
 )
 
-type RouteMux[T_Route any] struct {
-	*ServeMux
-	Route          T_Route
-	ResponseWriter *http.ResponseWriter
-}
-
-func Route[T_Route any](mux *ServeMux) *RouteMux[T_Route] {
-	var route T_Route
-	return &RouteMux[T_Route]{ServeMux: mux, Route: route}
-}
-
 func (mux *RouteMux[T_Route]) HandleFunc(pattern string, handlerFunc http.HandlerFunc) {
 	muxType := reflect.TypeOf(mux).Elem()
 	routeStructField, ok := muxType.FieldByName("Route")
@@ -117,60 +106,45 @@ func newRoute[T_Route any](routeRef reflect.Value, w http.ResponseWriter, r *htt
 	if routeRef.Kind() == reflect.Interface {
 		return reflect.ValueOf(struct{}{}).Interface().(T_Route), nil
 	}
-	queryTypeName := getTypeName(RouteQuery[any]{})
-	query := routeRef.FieldByName(queryTypeName)
-	if query.IsValid() {
-		request := query.FieldByName("Request")
-		if request.CanSet() {
-			request.Set(reflect.ValueOf(r))
+
+	paramsTypeName := getTypeName(HasParams[any]{})
+	paramsValue := routeRef.FieldByName(paramsTypeName)
+	if paramsValue.IsValid() {
+		requestValue := paramsValue.FieldByName("Request")
+		if requestValue.CanSet() {
+			requestValue.Set(reflect.ValueOf(r))
 		}
-		queryInstance, _ := reflect.TypeOf(routeRef.Interface()).FieldByName(queryTypeName)
-		validateMethod, _ := queryInstance.Type.MethodByName("Validate")
-		queryAndErr := validateMethod.Func.Call([]reflect.Value{query})
-		err := queryAndErr[1].Interface()
+		paramsField, _ := reflect.TypeOf(routeRef.Interface()).FieldByName(paramsTypeName)
+		validateMethod, _ := paramsField.Type.MethodByName("Validate")
+		paramsAndErr := validateMethod.Func.Call([]reflect.Value{paramsValue})
+		err := paramsAndErr[1].Interface()
 		if err != nil {
 			return routeRef.Interface().(T_Route), err.(error)
 		}
 	}
 
-	pathTypeName := getTypeName(RoutePath[any]{})
-	path := routeRef.FieldByName(pathTypeName)
-	if path.IsValid() {
-		request := path.FieldByName("Request")
-		if request.CanSet() {
-			request.Set(reflect.ValueOf(r))
+	bodyTypeName := getTypeName(HasBody[any]{})
+	bodyValue := routeRef.FieldByName(bodyTypeName)
+	if bodyValue.IsValid() {
+		requestValue := bodyValue.FieldByName("Request")
+		if requestValue.CanSet() {
+			requestValue.Set(reflect.ValueOf(r))
 		}
-		pathInstance, _ := reflect.TypeOf(routeRef.Interface()).FieldByName(pathTypeName)
-		validateMethod, _ := pathInstance.Type.MethodByName("Validate")
-		pathAndErr := validateMethod.Func.Call([]reflect.Value{path})
-		err := pathAndErr[1].Interface()
-		if err != nil {
-			return routeRef.Interface().(T_Route), err.(error)
-		}
-	}
-
-	bodyTypeName := getTypeName(RouteBody[any]{})
-	body := routeRef.FieldByName(bodyTypeName)
-	if body.IsValid() {
-		request := body.FieldByName("Request")
-		if request.CanSet() {
-			request.Set(reflect.ValueOf(r))
-		}
-		bodyInstance, _ := reflect.TypeOf(routeRef.Interface()).FieldByName(bodyTypeName)
-		validateMethod, _ := bodyInstance.Type.MethodByName("Validate")
-		bodyAndErr := validateMethod.Func.Call([]reflect.Value{body})
+		bodyField, _ := reflect.TypeOf(routeRef.Interface()).FieldByName(bodyTypeName)
+		validateMethod, _ := bodyField.Type.MethodByName("Validate")
+		bodyAndErr := validateMethod.Func.Call([]reflect.Value{bodyValue})
 		err := bodyAndErr[1].Interface()
 		if err != nil {
 			return routeRef.Interface().(T_Route), err.(error)
 		}
 	}
 
-	responseTypeName := getTypeName(RouteResponse[any]{})
-	response := routeRef.FieldByName(responseTypeName)
-	if response.IsValid() {
-		responseWriter := response.FieldByName("ResponseWriter")
-		if responseWriter.CanSet() {
-			responseWriter.Set(reflect.ValueOf(w))
+	responseTypeName := getTypeName(HasResponse[any]{})
+	responseValue := routeRef.FieldByName(responseTypeName)
+	if responseValue.IsValid() {
+		responseWriterValue := responseValue.FieldByName("ResponseWriter")
+		if responseWriterValue.CanSet() {
+			responseWriterValue.Set(reflect.ValueOf(w))
 		}
 	}
 
