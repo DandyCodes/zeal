@@ -14,24 +14,24 @@ var Mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
 func main() {
 	addRoutes(Mux)
 
-	openApiSpecOptions := zeal.OpenAPISpecOptions{
+	openAPISpecOptions := zeal.OpenAPISpecOptions{
 		ZealMux:       Mux,
 		Version:       "v0.1.0",
 		Description:   "Example API description.",
 		StripPkgPaths: []string{"main", "models", "github.com/DandyCodes/zeal"},
 	}
-	spec, err := zeal.CreateOpenAPISpec(openApiSpecOptions)
+	spec, err := zeal.CreateOpenAPISpec(openAPISpecOptions)
 	if err != nil {
 		log.Fatalf("Failed to create OpenAPI spec: %v", err)
 	}
 
-	PORT := 3975
-	SWAGGER_PATTERN := "/swagger-ui/"
-	fmt.Printf("Visit http://localhost:%v%v to see API definitions\n", PORT, SWAGGER_PATTERN)
-	zeal.ServeSwaggerUI(Mux, spec, "GET "+SWAGGER_PATTERN)
+	port := 3975
+	swaggerPattern := "/swagger-ui/"
+	fmt.Printf("Visit http://localhost:%v%v to see API definitions\n", port, swaggerPattern)
+	zeal.ServeSwaggerUI(Mux, spec, "GET "+swaggerPattern)
 
-	fmt.Printf("Listening on port %v...\n", PORT)
-	http.ListenAndServe(fmt.Sprintf(":%v", PORT), Mux)
+	fmt.Printf("Listening on port %v...\n", port)
+	http.ListenAndServe(fmt.Sprintf(":%v", port), Mux)
 }
 
 var foodMenu = models.Menu{
