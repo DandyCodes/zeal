@@ -57,7 +57,7 @@ Passing the basic ***zeal.Route*** as a type parameter to ***zeal.NewRoute*** me
 * URL parameters
 * Request body
 
-Now, define your handler function using the newly create route:
+Now, define your handler function using the newly created route:
 
 ```go
 route.HandleFunc("POST /hello", func(w http.ResponseWriter, r *http.Request) {
