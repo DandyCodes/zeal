@@ -6,9 +6,9 @@
 
 ## About
 
-* Uses the standard library http.HandlerFunc for maximum compatibility.
-
 * Define structs to validate URL parameters, request bodies and responses.
+
+* Uses the standard library http.HandlerFunc for maximum compatibility.
 
 * URL parameters and request bodies are automatically converted to their declared type.
 
@@ -48,7 +48,7 @@ func main() {
 Create your route by calling ***zeal.NewRoute***, passing it a ***zeal.ServeMux***:
 
 ```go
-var postRoot = zeal.NewRoute[zeal.Route](mux)
+var route = zeal.NewRoute[zeal.Route](mux)
 ```
 
 Passing the basic ***zeal.Route*** as a type parameter to ***zeal.NewRoute*** means this route has no:
@@ -60,7 +60,7 @@ Passing the basic ***zeal.Route*** as a type parameter to ***zeal.NewRoute*** me
 Now, define your handler function using the newly create route:
 
 ```go
-postRoot.HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
+route.HandleFunc("POST /hello", func(w http.ResponseWriter, r *http.Request) {
     fmt.Println("Hello, world!")
 })
 ```
@@ -209,7 +209,7 @@ The body is converted to its declared type. If this fails, http.StatusUnprocessa
 
 Struct fields must be capitalized to be accessed in the route - for example, 'Price'.
 
-## Miscellaneous
+## Error Handling
 
 Use the ***HandleFuncErr*** method to create a handler function which returns an error.
 

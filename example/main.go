@@ -53,8 +53,8 @@ var drinksMenu = models.Menu{
 var menus = []models.Menu{foodMenu, drinksMenu}
 
 func addRoutes(mux *zeal.ServeMux) {
-	var postRoot = zeal.NewRoute[zeal.Route](mux)
-	postRoot.HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
+	var route = zeal.NewRoute[zeal.Route](mux)
+	route.HandleFunc("POST /hello", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Hello, world!")
 	})
 
