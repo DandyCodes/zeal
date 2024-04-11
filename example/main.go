@@ -9,13 +9,13 @@ import (
 	"github.com/DandyCodes/zeal/example/models"
 )
 
-var mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
+var mux = zeal.NewZealMux(http.NewServeMux(), "Example API")
 
 func main() {
 	addRoutes(mux)
 
 	specOptions := zeal.SpecOptions{
-		ServeMux:      mux,
+		ZealMux:       mux,
 		Version:       "v0.1.0",
 		Description:   "Example API description.",
 		StripPkgPaths: []string{"main", "models", "github.com/DandyCodes/zeal"},
@@ -52,7 +52,7 @@ var drinksMenu = models.Menu{
 
 var menus = []models.Menu{foodMenu, drinksMenu}
 
-func addRoutes(mux *zeal.ServeMux) {
+func addRoutes(mux *zeal.ZealMux) {
 	var route = zeal.NewRoute[zeal.Route](mux)
 	route.HandleFunc("POST /hello", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Hello, world!")

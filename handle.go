@@ -9,7 +9,7 @@ import (
 func (mux *Route) HandleFunc(pattern string, handlerFunc http.HandlerFunc) {
 	routeValue := defineRoute(mux, pattern)
 	wrapped := wrapHandlerFunc(routeValue, handlerFunc)
-	mux.ServeMux.HandleFunc(pattern, wrapped)
+	mux.ZealMux.HandleFunc(pattern, wrapped)
 }
 
 func wrapHandlerFunc(routeValue reflect.Value, handlerFunc http.HandlerFunc) func(w http.ResponseWriter, r *http.Request) {
@@ -29,7 +29,7 @@ type HandlerFuncErr func(http.ResponseWriter, *http.Request) error
 func (mux *Route) HandleFuncErr(pattern string, handlerFunc HandlerFuncErr) {
 	routeValue := defineRoute(mux, pattern)
 	wrapped := wrapHandlerFuncErr(routeValue, handlerFunc)
-	mux.ServeMux.HandleFunc(pattern, wrapped)
+	mux.ZealMux.HandleFunc(pattern, wrapped)
 }
 
 func wrapHandlerFuncErr(routeValue reflect.Value, handlerFunc HandlerFuncErr) func(w http.ResponseWriter, r *http.Request) {
@@ -44,10 +44,10 @@ func wrapHandlerFuncErr(routeValue reflect.Value, handlerFunc HandlerFuncErr) fu
 	}
 }
 
-func defineRoute(mux *Route, pattern string) reflect.Value {
-	routeDefinitionValue := reflect.ValueOf(mux).Elem().FieldByName("RouteDefinition")
-	routeValue := routeDefinitionValue.Elem().Elem().Elem()
-	registerRoute(mux.ServeMux, pattern, routeValue.Type())
+func defineRoute(route *Route, pattern string) reflect.Value {
+	routeValues := reflect.ValueOf(route).MethodByName("Validate").Call([]reflect.Value{})
+	routeValue := routeValues[0].Elem().Elem().Elem()
+	registerRoute(route.ZealMux, pattern, routeValue)
 	return routeValue
 }
 
@@ -59,14 +59,9 @@ func initRoute(routeValue reflect.Value, w http.ResponseWriter, r *http.Request)
 	paramsTypeName := getTypeName(HasParams[any]{})
 	paramsValue := routeValue.FieldByName(paramsTypeName)
 	if paramsValue.IsValid() {
-		requestValue := paramsValue.FieldByName("Request")
-		if requestValue.CanSet() {
-			requestValue.Set(reflect.ValueOf(r))
-		}
-		paramsField, _ := reflect.TypeOf(routeValue.Interface()).FieldByName(paramsTypeName)
-		validateMethod, _ := paramsField.Type.MethodByName("Validate")
-		paramsAndErr := validateMethod.Func.Call([]reflect.Value{paramsValue})
-		err := paramsAndErr[1].Interface()
+		validateParams := paramsValue.Addr().MethodByName("Validate")
+		paramsAndParamsErr := validateParams.Call([]reflect.Value{reflect.ValueOf(r)})
+		err := paramsAndParamsErr[1].Interface()
 		if err != nil {
 			return err.(error)
 		}
@@ -75,14 +70,9 @@ func initRoute(routeValue reflect.Value, w http.ResponseWriter, r *http.Request)
 	bodyTypeName := getTypeName(HasBody[any]{})
 	bodyValue := routeValue.FieldByName(bodyTypeName)
 	if bodyValue.IsValid() {
-		requestValue := bodyValue.FieldByName("Request")
-		if requestValue.CanSet() {
-			requestValue.Set(reflect.ValueOf(r))
-		}
-		bodyField, _ := reflect.TypeOf(routeValue.Interface()).FieldByName(bodyTypeName)
-		validateMethod, _ := bodyField.Type.MethodByName("Validate")
-		bodyAndErr := validateMethod.Func.Call([]reflect.Value{bodyValue})
-		err := bodyAndErr[1].Interface()
+		validateBody := bodyValue.Addr().MethodByName("Validate")
+		bodyAndBodyErr := validateBody.Call([]reflect.Value{reflect.ValueOf(r)})
+		err := bodyAndBodyErr[1].Interface()
 		if err != nil {
 			return err.(error)
 		}
@@ -91,10 +81,8 @@ func initRoute(routeValue reflect.Value, w http.ResponseWriter, r *http.Request)
 	responseTypeName := getTypeName(HasResponse[any]{})
 	responseValue := routeValue.FieldByName(responseTypeName)
 	if responseValue.IsValid() {
-		responseWriterValue := responseValue.FieldByName("ResponseWriter")
-		if responseWriterValue.CanSet() {
-			responseWriterValue.Set(reflect.ValueOf(w))
-		}
+		validateResponse := responseValue.Addr().MethodByName("Validate")
+		validateResponse.Call([]reflect.Value{reflect.ValueOf(&w)})
 	}
 
 	return nil

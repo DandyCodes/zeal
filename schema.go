@@ -10,7 +10,7 @@ import (
 	"github.com/a-h/rest"
 )
 
-func registerRoute(mux *ServeMux, pattern string, routeType reflect.Type) {
+func registerRoute(mux *ZealMux, pattern string, routeType reflect.Value) {
 	route, err := newRoute(pattern, mux)
 	if err != nil {
 		fmt.Println(err)
@@ -23,38 +23,32 @@ func registerRoute(mux *ServeMux, pattern string, routeType reflect.Type) {
 	}
 
 	paramsTypeName := getTypeName(HasParams[any]{})
-	paramsField, ok := routeType.FieldByName(paramsTypeName)
-	if ok {
-		method, ok := paramsField.Type.MethodByName("Params")
-		if ok {
-			if err := registerParams(route, pattern, method.Type.Out(0)); err != nil {
-				fmt.Println(err)
-			}
+	paramsField := routeType.FieldByName(paramsTypeName)
+	if paramsField.IsValid() {
+		method := paramsField.Addr().MethodByName("Params")
+		if err := registerParams(route, pattern, method.Type().Out(0)); err != nil {
+			fmt.Println(err)
 		}
 	}
 
 	bodyTypeName := getTypeName(HasBody[any]{})
-	bodyField, ok := routeType.FieldByName(bodyTypeName)
-	if ok {
-		method, ok := bodyField.Type.MethodByName("Body")
-		if ok {
-			registerBody(route, method.Type.Out(0))
-		}
+	bodyField := routeType.FieldByName(bodyTypeName)
+	if bodyField.IsValid() {
+		method := bodyField.Addr().MethodByName("Body")
+		registerBody(route, method.Type().Out(0))
 	}
 
 	responseTypeName := getTypeName(HasResponse[any]{})
-	responseField, ok := routeType.FieldByName(responseTypeName)
-	if ok {
-		method, ok := responseField.Type.MethodByName("Response")
-		if ok {
-			registerResponse(route, method.Type.In(1))
-		}
+	responseField := routeType.FieldByName(responseTypeName)
+	if responseField.IsValid() {
+		method := responseField.Addr().MethodByName("Response")
+		registerResponse(route, method.Type().In(1))
 	} else {
 		registerResponse(route, nil)
 	}
 }
 
-func newRoute(pattern string, mux *ServeMux) (*rest.Route, error) {
+func newRoute(pattern string, mux *ZealMux) (*rest.Route, error) {
 	method, path, found := strings.Cut(pattern, " ")
 	if !found {
 		return nil, fmt.Errorf("expected URL pattern with HTTP method, received: %v", pattern)

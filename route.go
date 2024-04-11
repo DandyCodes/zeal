@@ -8,12 +8,7 @@ import (
 	"reflect"
 )
 
-type Route struct {
-	*ServeMux
-	RouteDefinition *any
-}
-
-func NewRoute[T_Route http.Handler](mux *ServeMux) *T_Route {
+func NewRoute[T_Route http.Handler](mux *ZealMux) *T_Route {
 	var route T_Route
 
 	routePtrValue := reflect.New(reflect.TypeOf(route))
@@ -24,22 +19,35 @@ func NewRoute[T_Route http.Handler](mux *ServeMux) *T_Route {
 
 	routeMux := routeStructValue.FieldByName("Route")
 	if routeMux.IsValid() {
-		routeMux.FieldByName("ServeMux").Set(reflect.ValueOf(mux))
-		routeMux.FieldByName("RouteDefinition").Set(routeInterfacePtr)
+		routeMux.FieldByName("ZealMux").Set(reflect.ValueOf(mux))
+		routeMux.Addr().MethodByName("Validate").Call([]reflect.Value{routeInterfacePtr})
 	} else {
-		routeStructValue.FieldByName("RouteDefinition").Set(routeInterfacePtr)
-		serveMux := routeStructValue.FieldByName("ServeMux")
-		serveMux.Set(reflect.ValueOf(mux))
+		routeStructValue.Addr().MethodByName("Validate").Call([]reflect.Value{routeInterfacePtr})
+		zealMux := routeStructValue.FieldByName("ZealMux")
+		zealMux.Set(reflect.ValueOf(mux))
 	}
 
 	return routePtrValue.Interface().(*T_Route)
 }
 
-type HasParams[T_Params any] struct {
-	Request *http.Request
+type Route struct {
+	*ZealMux
+	routeDefinition *any
 }
 
-func (p HasParams[T_Params]) Params() T_Params {
+func (r *Route) Validate(routeDefinition ...*any) *any {
+	if len(routeDefinition) > 0 {
+		r.routeDefinition = routeDefinition[0]
+	}
+
+	return r.routeDefinition
+}
+
+type HasParams[T_Params any] struct {
+	request *http.Request
+}
+
+func (p *HasParams[T_Params]) Params() T_Params {
 	var params T_Params
 	paramsType := reflect.TypeOf(params)
 	if paramsType == nil {
@@ -52,9 +60,9 @@ func (p HasParams[T_Params]) Params() T_Params {
 		field := paramsType.Field(i)
 		structField := paramsValue.FieldByName(field.Name)
 		if structField.CanSet() {
-			rawParamValue := p.Request.PathValue(field.Name)
+			rawParamValue := p.request.PathValue(field.Name)
 			if rawParamValue == "" {
-				rawParamValue = p.Request.URL.Query().Get(field.Name)
+				rawParamValue = p.request.URL.Query().Get(field.Name)
 			}
 			paramValue, _ := parsePrimitive(rawParamValue, field.Type)
 			structField.Set(reflect.ValueOf(paramValue))
@@ -66,7 +74,9 @@ func (p HasParams[T_Params]) Params() T_Params {
 	return params
 }
 
-func (p HasParams[T_Params]) Validate() (T_Params, error) {
+func (p *HasParams[T_Params]) Validate(request *http.Request) (T_Params, error) {
+	p.request = request
+
 	var params T_Params
 	paramsType := reflect.TypeOf(params)
 	if paramsType == nil {
@@ -81,9 +91,9 @@ func (p HasParams[T_Params]) Validate() (T_Params, error) {
 		field := paramsType.Field(i)
 		structField := paramsValue.FieldByName(field.Name)
 		if structField.CanSet() {
-			rawParamValue := p.Request.PathValue(field.Name)
+			rawParamValue := p.request.PathValue(field.Name)
 			if rawParamValue == "" {
-				rawParamValue = p.Request.URL.Query().Get(field.Name)
+				rawParamValue = p.request.URL.Query().Get(field.Name)
 			}
 			paramValue, err := parsePrimitive(rawParamValue, field.Type)
 			if err != nil {
@@ -101,31 +111,33 @@ func (p HasParams[T_Params]) Validate() (T_Params, error) {
 }
 
 type HasBody[T_Body any] struct {
-	Request *http.Request
+	request *http.Request
 }
 
-func (b HasBody[T_Body]) Body() T_Body {
+func (b *HasBody[T_Body]) Body() T_Body {
 	var body T_Body
-	defer b.Request.Body.Close()
-	json.NewDecoder(b.Request.Body).Decode(&body)
+	defer b.request.Body.Close()
+	json.NewDecoder(b.request.Body).Decode(&body)
 	return body
 }
 
-func (b HasBody[T_Body]) Validate() (T_Body, error) {
+func (b *HasBody[T_Body]) Validate(request *http.Request) (T_Body, error) {
+	b.request = request
+
 	var body T_Body
 	bodyType := reflect.TypeOf(body)
 	if bodyType == nil {
 		return body, nil
 	}
 
-	defer b.Request.Body.Close()
-	bodyBytes, err := io.ReadAll(b.Request.Body)
+	defer b.request.Body.Close()
+	bodyBytes, err := io.ReadAll(b.request.Body)
 	if err != nil {
 		return body, nil
 	}
 
 	// Replace the original body with a new reader based on the read bytes
-	b.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	b.request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
 	decoder := json.NewDecoder(bytes.NewReader(bodyBytes))
 	decoder.DisallowUnknownFields() // Enable strict mode
@@ -138,22 +150,26 @@ func (b HasBody[T_Body]) Validate() (T_Body, error) {
 }
 
 type HasResponse[T_Response any] struct {
-	ResponseWriter http.ResponseWriter
+	responseWriter *http.ResponseWriter
 }
 
-func (r HasResponse[T_Response]) Response(data T_Response, status ...int) error {
-	r.ResponseWriter.Header().Add("Content-Type", "application/json")
+func (r *HasResponse[T_Response]) Response(data T_Response, status ...int) error {
+	(*r.responseWriter).Header().Add("Content-Type", "application/json")
 
 	if len(status) > 0 {
-		r.ResponseWriter.WriteHeader(status[0])
+		(*r.responseWriter).WriteHeader(status[0])
 	}
 
-	if err := json.NewEncoder(r.ResponseWriter).Encode(data); err != nil {
-		http.Error(r.ResponseWriter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+	if err := json.NewEncoder((*r.responseWriter)).Encode(data); err != nil {
+		http.Error((*r.responseWriter), http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return err
 	}
 
 	return nil
+}
+
+func (r *HasResponse[T_Response]) Validate(responseWriter *http.ResponseWriter) {
+	r.responseWriter = responseWriter
 }
 
 func WriteHeader(w http.ResponseWriter, statusCode int) error {

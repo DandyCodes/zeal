@@ -8,30 +8,30 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
-type ServeMux struct {
+type ZealMux struct {
 	*http.ServeMux
 	Api *rest.API
 }
 
-func NewServeMux(mux *http.ServeMux, apiName ...string) *ServeMux {
+func NewZealMux(mux *http.ServeMux, apiName ...string) *ZealMux {
 	name := "API"
 	if len(apiName) > 0 {
 		name = apiName[0]
 	}
-	return &ServeMux{ServeMux: mux, Api: rest.NewAPI(name)}
+	return &ZealMux{ServeMux: mux, Api: rest.NewAPI(name)}
 }
 
 type SpecOptions struct {
-	ServeMux      *ServeMux
+	ZealMux       *ZealMux
 	Version       string
 	Description   string
 	StripPkgPaths []string
 }
 
 func NewOpenAPISpec(options SpecOptions) (*openapi3.T, error) {
-	options.ServeMux.Api.StripPkgPaths = options.StripPkgPaths
+	options.ZealMux.Api.StripPkgPaths = options.StripPkgPaths
 
-	spec, err := options.ServeMux.Api.Spec()
+	spec, err := options.ZealMux.Api.Spec()
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func removeDefaultResponses(operation *openapi3.Operation) {
 	})
 }
 
-func ServeSwaggerUI(mux *ServeMux, openAPISpec *openapi3.T, path string) error {
+func ServeSwaggerUI(mux *ZealMux, openAPISpec *openapi3.T, path string) error {
 	ui, err := swaggerui.New(openAPISpec)
 	if err != nil {
 		return err

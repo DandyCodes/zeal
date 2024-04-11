@@ -17,13 +17,13 @@
 ## Server
 
 ```go
-var mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
+var mux = zeal.NewZealMux(http.NewServeMux(), "Example API")
 
 func main() {
     addRoutes(mux)
 
     specOptions := zeal.SpecOptions{
-        ServeMux:      mux,
+        ZealMux:       mux,
         Version:       "v0.1.0",
         Description:   "Example API description.",
         StripPkgPaths: []string{"main", "models", "github.com/DandyCodes/zeal"},
@@ -45,7 +45,7 @@ func main() {
 
 ## Routes
 
-Create your route by calling ***zeal.NewRoute***, passing it a ***zeal.ServeMux***:
+Create your route by calling ***zeal.NewRoute***, passing it a ***zeal.ZealMux***:
 
 ```go
 var route = zeal.NewRoute[zeal.Route](mux)
