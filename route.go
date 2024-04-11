@@ -8,22 +8,38 @@ import (
 	"reflect"
 )
 
-type RouteMux[T_Route any] struct {
+type Route struct {
 	*ServeMux
-	Route          T_Route
-	ResponseWriter *http.ResponseWriter
+	RouteDefinition *any
 }
 
-func Route[T_Route any](mux *ServeMux) *RouteMux[T_Route] {
+func NewRoute[T_Route http.Handler](mux *ServeMux) *T_Route {
 	var route T_Route
-	return &RouteMux[T_Route]{ServeMux: mux, Route: route}
+
+	routePtrValue := reflect.New(reflect.TypeOf(route))
+	routeInterfacePtr := reflect.New(reflect.TypeOf(new(any)).Elem())
+	routeInterfacePtr.Elem().Set(routePtrValue)
+
+	routeStructValue := routePtrValue.Elem()
+
+	routeMux := routeStructValue.FieldByName("Route")
+	if routeMux.IsValid() {
+		routeMux.FieldByName("ServeMux").Set(reflect.ValueOf(mux))
+		routeMux.FieldByName("RouteDefinition").Set(routeInterfacePtr)
+	} else {
+		routeStructValue.FieldByName("RouteDefinition").Set(routeInterfacePtr)
+		serveMux := routeStructValue.FieldByName("ServeMux")
+		serveMux.Set(reflect.ValueOf(mux))
+	}
+
+	return routePtrValue.Interface().(*T_Route)
 }
 
-type RouteParams[T_Params any] struct {
+type HasParams[T_Params any] struct {
 	Request *http.Request
 }
 
-func (p RouteParams[T_Params]) Params() T_Params {
+func (p HasParams[T_Params]) Params() T_Params {
 	var params T_Params
 	paramsType := reflect.TypeOf(params)
 	if paramsType == nil {
@@ -50,7 +66,7 @@ func (p RouteParams[T_Params]) Params() T_Params {
 	return params
 }
 
-func (p RouteParams[T_Params]) Validate() (T_Params, error) {
+func (p HasParams[T_Params]) Validate() (T_Params, error) {
 	var params T_Params
 	paramsType := reflect.TypeOf(params)
 	if paramsType == nil {
@@ -84,19 +100,18 @@ func (p RouteParams[T_Params]) Validate() (T_Params, error) {
 	return params, error
 }
 
-type RouteBody[T_Body any] struct {
-	ResponseWriter http.ResponseWriter
-	Request        *http.Request
+type HasBody[T_Body any] struct {
+	Request *http.Request
 }
 
-func (b RouteBody[T_Body]) Body() T_Body {
+func (b HasBody[T_Body]) Body() T_Body {
 	var body T_Body
 	defer b.Request.Body.Close()
 	json.NewDecoder(b.Request.Body).Decode(&body)
 	return body
 }
 
-func (b RouteBody[T_Body]) Validate() (T_Body, error) {
+func (b HasBody[T_Body]) Validate() (T_Body, error) {
 	var body T_Body
 	bodyType := reflect.TypeOf(body)
 	if bodyType == nil {
@@ -122,11 +137,11 @@ func (b RouteBody[T_Body]) Validate() (T_Body, error) {
 	return body, nil
 }
 
-type RouteResponse[T_Response any] struct {
+type HasResponse[T_Response any] struct {
 	ResponseWriter http.ResponseWriter
 }
 
-func (r RouteResponse[T_Response]) Response(data T_Response, status ...int) error {
+func (r HasResponse[T_Response]) Response(data T_Response, status ...int) error {
 	r.ResponseWriter.Header().Add("Content-Type", "application/json")
 
 	if len(status) > 0 {
@@ -134,9 +149,19 @@ func (r RouteResponse[T_Response]) Response(data T_Response, status ...int) erro
 	}
 
 	if err := json.NewEncoder(r.ResponseWriter).Encode(data); err != nil {
-		r.ResponseWriter.WriteHeader(http.StatusInternalServerError)
+		http.Error(r.ResponseWriter, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return err
 	}
 
+	return nil
+}
+
+func WriteHeader(w http.ResponseWriter, statusCode int) error {
+	w.WriteHeader(statusCode)
+	return nil
+}
+
+func Error(w http.ResponseWriter, error string, code int) error {
+	http.Error(w, error, code)
 	return nil
 }

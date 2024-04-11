@@ -17,18 +17,18 @@
 ## Server
 
 ```go
-var Mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
+var mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
 
 func main() {
-    addRoutes(Mux)
+    addRoutes(mux)
 
-    openAPISpecOptions := zeal.OpenAPISpecOptions{
-        ZealMux:       Mux,
+    specOptions := zeal.SpecOptions{
+        ServeMux:      mux,
         Version:       "v0.1.0",
         Description:   "Example API description.",
         StripPkgPaths: []string{"main", "models", "github.com/DandyCodes/zeal"},
     }
-    spec, err := zeal.CreateOpenAPISpec(openAPISpecOptions)
+    openAPISpec, err := zeal.NewOpenAPISpec(specOptions)
     if err != nil {
         log.Fatalf("Failed to create OpenAPI spec: %v", err)
     }
@@ -36,63 +36,64 @@ func main() {
     port := 3975
     swaggerPattern := "/swagger-ui/"
     fmt.Printf("Visit http://localhost:%v%v to see API definitions\n", port, swaggerPattern)
-    zeal.ServeSwaggerUI(Mux, spec, "GET "+swaggerPattern)
+    zeal.ServeSwaggerUI(mux, openAPISpec, "GET "+swaggerPattern)
 
     fmt.Printf("Listening on port %v...\n", port)
-    http.ListenAndServe(fmt.Sprintf(":%v", port), Mux)
+    http.ListenAndServe(fmt.Sprintf(":%v", port), mux)
 }
 ```
 
 ## Routes
 
-A standard library http.HandlerFunc is passed to a zeal route.
-
-Create a route definition struct and pass it to ***zeal.Route*** as a type parameter:
+Create your route by calling ***zeal.NewRoute***, passing it a ***zeal.ServeMux***:
 
 ```go
-type PostRoot struct{}
-var postRoot = zeal.Route[PostRoot](Mux)
-postRoot.HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
-    fmt.Println("Hello, world!")
-    w.WriteHeader(http.StatusOK)
-})
+var postRoot = zeal.NewRoute[zeal.Route](mux)
 ```
 
-This route uses an empty struct which means it has no:
+Passing the basic ***zeal.Route*** as a type parameter to ***zeal.NewRoute*** means this route has no:
 
 * Response type
 * URL parameters
 * Request body
 
-Routes handled by Zeal are automatically documented in the OpenAPI spec.
-
-Using ***any*** in place of an empty struct accomplishes the same outcome:
+Now, define your handler function using the newly create route:
 
 ```go
-zeal.Route[any](Mux).HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
+postRoot.HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
     fmt.Println("Hello, world!")
 })
 ```
 
+Routes handled by Zeal are automatically documented in the OpenAPI spec.
+
 ## Responses
 
-Embed ***zeal.RouteResponse*** in your route definition, passing it the response type as a type parameter.
+Create a route definition struct and embed ***zeal.Route*** and ***zeal.HasResponse***.
 
-This route responds with an ***int***:
+This route will respond with an integer, so ***int*** is passed to ***zeal.HasResponse*** as a type parameter:
 
 ```go
-type GetAnswer struct{ zeal.RouteResponse[int] }
-var getAnswer = zeal.Route[GetAnswer](Mux)
+type GetAnswer struct {
+    zeal.Route
+    zeal.HasResponse[int]
+}
+```
+
+Create your route, passing your route definition as a type parameter, and define your handler function:
+
+```go
+var getAnswer = zeal.NewRoute[GetAnswer](mux)
 getAnswer.HandleFunc("GET /answer", func(w http.ResponseWriter, r *http.Request) {
-    getAnswer.Route.Response(42)
+    getAnswer.Response(42)
 })
 ```
 
-The ***Route.Response*** method will only accept data of the declared response type.
+The ***Response*** method will only accept data of the declared response type.
 
 ---
 
-A ***zeal.RouteResponse*** can use complex types.
+The ***zeal.Response*** can be defined with complex types.
 
 Here is some example data:
 
@@ -120,51 +121,50 @@ This route responds with a slice of menus:
 var menus = []models.Menu{foodMenu, drinksMenu}
 
 type GetMenus struct {
-    zeal.RouteResponse[[]models.Menu]
+    zeal.Route
+    zeal.HasResponse[[]models.Menu]
 }
-var getMenus = zeal.Route[GetMenus](Mux)
+var getMenus = zeal.NewRoute[GetMenus](mux)
 getMenus.HandleFunc("GET /menus", func(w http.ResponseWriter, r *http.Request) {
-    getMenus.Route.Response(menus, http.StatusOK)
+    getMenus.Response(menus)
 })
 ```
 
-The ***Route.Response*** method can be passed an optional HTTP status code (200 OK is sent by default).
-
 ## URL Parameters
 
-Embed ***zeal.RouteParams*** in your route definition, passing it the params type as a type parameter.
+Create a route definition struct and embed ***zeal.Route*** and ***zeal.HasParams***.
 
-The params struct can be anonymous and defined in-line:
+You can pass ***zeal.HasParams*** an anonymous in-line struct definition as a type parameter.
+
+Create your route, passing your route definition as a type parameter, and define your handler function:
 
 ```go
-type GetMenu struct {
-    zeal.RouteParams[struct {
+type DeleteMenu struct {
+    zeal.Route
+    zeal.HasParams[struct {
         ID    int
         Quiet bool
     }]
-    zeal.RouteResponse[models.Menu]
 }
-var getMenu = zeal.Route[GetMenu](Mux)
-getMenu.HandleFunc("GET /menus/{ID}", func(w http.ResponseWriter, r *http.Request) {
-    quiet := getMenu.Route.Params().Quiet
-    if !quiet {
-        fmt.Println("Getting menu")
+var deleteMenu = zeal.NewRoute[DeleteMenu](mux)
+deleteMenu.HandleFunc("DELETE /menus/{ID}", func(w http.ResponseWriter, r *http.Request) {
+    if !deleteMenu.Params().Quiet {
+        fmt.Println("Deleting menu")
     }
 
-    ID := getMenu.Route.Params().ID
     for i := 0; i < len(menus); i++ {
-        menu := menus[i]
-        if menu.ID == ID {
-            getMenu.Route.Response(menu)
+        if menus[i].ID == deleteMenu.Params().ID {
+            menus = append(menus[:i], menus[i+1:]...)
+            w.WriteHeader(http.StatusNoContent)
             return
         }
     }
 
-    getMenu.Error(http.StatusNotFound)
+    w.WriteHeader(http.StatusNotFound)
 })
 ```
 
-Params found in the URL pattern (for example, 'ID' in '/menus/{ID}') will be defined as path params - all others will be query params.
+Params found in the URL pattern (for example, 'ID' in '/menus/{ID}') will be defined as path params whilst others will be query params.
 
 Params are converted to their declared type. If this fails, http.StatusUnprocessableEntity 422 is sent immediately.
 
@@ -172,37 +172,36 @@ Struct fields must be capitalized to be accessed in the route - for example, 'Qu
 
 ## Request Bodies
 
-Embed ***zeal.RouteBody*** in your route definition, passing it the body type as a type parameter:
+Create a route definition struct and embed ***zeal.Route*** and ***zeal.HasBody***.
+
+Pass the body type to ***zeal.HasBody*** as a type parameter.
+
+Create your route, passing your route definition as a type parameter, and define your handler function:
 
 ```go
 type PutItem struct {
-    zeal.RouteBody[models.Item]
-    zeal.RouteResponse[models.Item]
+    zeal.Route
+    zeal.HasBody[models.Item]
 }
-var putItem = zeal.Route[PutItem](Mux)
+var putItem = zeal.NewRoute[PutItem](mux)
 putItem.HandleFunc("PUT /items", func(w http.ResponseWriter, r *http.Request) {
-    item := putItem.Route.Body()
+    item := putItem.Body()
     if item.Price < 0 {
-        putItem.Error(http.StatusBadRequest, "Price cannot be negative")
+        http.Error(w, "Price cannot be negative", http.StatusBadRequest)
         return
     }
 
     for i := range menus {
         for j := range menus[i].Items {
-            if menus[i].Items[j].Name != item.Name {
-                continue
+            if menus[i].Items[j].Name == item.Name {
+                menus[i].Items[j].Price = item.Price
+                return
             }
-
-            menus[i].Items[j].Price = item.Price
-            updatedItem := menus[i].Items[j]
-            putItem.Route.Response(updatedItem)
-            return
         }
     }
 
-    menus[1].Items = append(menus[1].Items, item)
-    updatedItem := menus[1].Items[len(menus[1].Items)-1]
-    putItem.Route.Response(updatedItem, http.StatusCreated)
+    menus[0].Items = append(menus[0].Items, item)
+    w.WriteHeader(http.StatusCreated)
 })
 ```
 
@@ -212,49 +211,48 @@ Struct fields must be capitalized to be accessed in the route - for example, 'Pr
 
 ## Miscellaneous
 
-Use the ***HandleErr*** method to create a handler function which returns an error.
-
-Use the ***HandleErr*** method to create a handler function which returns an error.
+Use the ***HandleFuncErr*** method to create a handler function which returns an error.
 
 Route handler functions can be defined in an outer scope:
 
 ```go
-var Mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
+var mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
 
 type PostItem struct {
-    zeal.RouteParams[struct{ MenuID int }]
-    zeal.RouteBody[models.Item]
+    zeal.Route
+    zeal.HasParams[struct{ MenuID int }]
+    zeal.HasBody[models.Item]
+    zeal.HasResponse[models.Item]
 }
 
-var postItem = zeal.Route[PostItem](Mux)
+var postItem = zeal.NewRoute[PostItem](mux)
 
 func addOuterScopeRoute() {
-    postItem.HandleErr("POST /items/{MenuID}", HandlePostItem)
+    postItem.HandleFuncErr("POST /items/{MenuID}", HandlePostItem)
 }
 
 func HandlePostItem(w http.ResponseWriter, r *http.Request) error {
-    item := postItem.Route.Body()
+    item := postItem.Body()
     if item.Price < 0 {
-        return postItem.Error(http.StatusBadRequest, "Price cannot be negative")
+        return zeal.Error(w, "Price cannot be negative", http.StatusBadRequest)
     }
 
-    MenuID := postItem.Route.Params().MenuID
     for i := range menus {
-        if menus[i].ID != MenuID {
-            continue
+        if menus[i].ID == postItem.Params().MenuID {
+            menus[i].Items = append(menus[i].Items, item)
+            return postItem.Response(item, http.StatusCreated)
         }
-
-        menus[i].Items = append(menus[i].Items, item)
-        return postItem.Status(http.StatusCreated)
     }
 
-    return postItem.Error(http.StatusNotFound)
+    return zeal.WriteHeader(w, http.StatusNotFound)
 }
 ```
 
-The ***Status*** method responds with a given HTTP status code.
+The ***zeal.Error*** function returns a nil error after calling ***http.Error*** with a given error message and HTTP status code.
 
-The ***Error*** method responds with a given HTTP status code and an optional error message. It must be passed an error code (4xx or 5xx), or else it will respond with http.StatusInternalServerError 500 instead.
+The ***Response*** method can be passed an optional HTTP status code (200 OK is sent by default). It returns a nil error if successful. Otherwise, it returns the JSON serialization error after calling ***http.Error*** with ***http.StatusInternalServerError***.
+
+The ***zeal.WriteHeader*** function returns a nil error after calling ***http.ResponseWriter.WriteHeader*** with a given HTTP status code.
 
 ## Credits
 

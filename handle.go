@@ -1,146 +1,95 @@
 package zeal
 
 import (
-	"fmt"
 	"net/http"
 	"reflect"
-	"strconv"
 	"strings"
 )
 
-func (mux *RouteMux[T_Route]) HandleFunc(pattern string, handlerFunc http.HandlerFunc) {
-	muxType := reflect.TypeOf(mux).Elem()
-	routeStructField, ok := muxType.FieldByName("Route")
-	if ok {
-		registerRoute(mux.ServeMux, pattern, routeStructField)
+func (mux *Route) HandleFunc(pattern string, handlerFunc http.HandlerFunc) {
+	routeValue := defineRoute(mux, pattern)
+	wrapped := wrapHandlerFunc(routeValue, handlerFunc)
+	mux.ServeMux.HandleFunc(pattern, wrapped)
+}
 
-		wrapped := func(w http.ResponseWriter, r *http.Request) {
-			muxValue := reflect.ValueOf(mux).Elem()
-			routeRef := reflect.New(routeStructField.Type).Elem()
-			route, err := newRoute[T_Route](routeRef, w, r)
-			if err != nil {
-				http.Error(w, http.StatusText(http.StatusUnprocessableEntity), http.StatusUnprocessableEntity)
-				return
-			}
-
-			routeField := muxValue.FieldByName("Route")
-			if routeField.CanSet() {
-				routeField.Set(reflect.ValueOf(route))
-			}
-
-			responseWriterField := muxValue.FieldByName("ResponseWriter")
-			if responseWriterField.CanSet() {
-				responseWriterField.Set(reflect.ValueOf(&w))
-			}
-
-			handlerFunc(w, r)
+func wrapHandlerFunc(routeValue reflect.Value, handlerFunc http.HandlerFunc) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := initRoute(routeValue, w, r)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusUnprocessableEntity), http.StatusUnprocessableEntity)
+			return
 		}
-		mux.ServeMux.HandleFunc(pattern, wrapped)
+
+		handlerFunc(w, r)
 	}
 }
 
-type HandlerFunc func(http.ResponseWriter, *http.Request) error
+type HandlerFuncErr func(http.ResponseWriter, *http.Request) error
 
-func (mux *RouteMux[T_Route]) HandleErr(pattern string, handlerFunc HandlerFunc) {
-	muxType := reflect.TypeOf(mux).Elem()
-	routeStructField, ok := muxType.FieldByName("Route")
-	if ok {
-		registerRoute(mux.ServeMux, pattern, routeStructField)
+func (mux *Route) HandleFuncErr(pattern string, handlerFunc HandlerFuncErr) {
+	routeValue := defineRoute(mux, pattern)
+	wrapped := wrapHandlerFuncErr(routeValue, handlerFunc)
+	mux.ServeMux.HandleFunc(pattern, wrapped)
+}
 
-		wrapped := func(w http.ResponseWriter, r *http.Request) {
-			muxValue := reflect.ValueOf(mux).Elem()
-			routeRef := reflect.New(routeStructField.Type).Elem()
-			route, err := newRoute[T_Route](routeRef, w, r)
-			if err != nil {
-				http.Error(w, http.StatusText(http.StatusUnprocessableEntity), http.StatusUnprocessableEntity)
-				return
-			}
-
-			routeField := muxValue.FieldByName("Route")
-			if routeField.CanSet() {
-				routeField.Set(reflect.ValueOf(route))
-			}
-
-			responseWriterField := muxValue.FieldByName("ResponseWriter")
-			if responseWriterField.CanSet() {
-				responseWriterField.Set(reflect.ValueOf(&w))
-			}
-
-			handlerFunc(w, r)
+func wrapHandlerFuncErr(routeValue reflect.Value, handlerFunc HandlerFuncErr) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := initRoute(routeValue, w, r)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusUnprocessableEntity), http.StatusUnprocessableEntity)
+			return
 		}
-		mux.ServeMux.HandleFunc(pattern, wrapped)
+
+		handlerFunc(w, r)
 	}
 }
 
-func (mux *RouteMux[T_Route]) Status(status int) error {
-	(*mux.ResponseWriter).WriteHeader(status)
-	return nil
+func defineRoute(mux *Route, pattern string) reflect.Value {
+	routeDefinitionValue := reflect.ValueOf(mux).Elem().FieldByName("RouteDefinition")
+	routeValue := routeDefinitionValue.Elem().Elem().Elem()
+	registerRoute(mux.ServeMux, pattern, routeValue.Type())
+	return routeValue
 }
 
-func (mux *RouteMux[T_Route]) Error(status int, message ...string) error {
-	status = ensureErrorCode(status)
-
-	var msg string
-	if len(message) > 0 {
-		msg = message[0]
-	} else {
-		msg = http.StatusText(status)
+func initRoute(routeValue reflect.Value, w http.ResponseWriter, r *http.Request) error {
+	if routeValue.Kind() == reflect.Interface {
+		return nil
 	}
 
-	http.Error(*mux.ResponseWriter, msg, status)
-
-	return fmt.Errorf(msg)
-}
-
-func ensureErrorCode(status int) int {
-	codeStr := strconv.Itoa(status)
-	if len(codeStr) == 3 && (codeStr[0] == '4' || codeStr[0] == '5') {
-		return status
-	}
-
-	fmt.Printf("Expected HTTP error status code. Received: %v. Returning 500 instead.\n", status)
-	return 500
-}
-
-func newRoute[T_Route any](routeRef reflect.Value, w http.ResponseWriter, r *http.Request) (T_Route, error) {
-	if routeRef.Kind() == reflect.Interface {
-		return reflect.ValueOf(struct{}{}).Interface().(T_Route), nil
-	}
-
-	paramsTypeName := getTypeName(RouteParams[any]{})
-	paramsValue := routeRef.FieldByName(paramsTypeName)
+	paramsTypeName := getTypeName(HasParams[any]{})
+	paramsValue := routeValue.FieldByName(paramsTypeName)
 	if paramsValue.IsValid() {
 		requestValue := paramsValue.FieldByName("Request")
 		if requestValue.CanSet() {
 			requestValue.Set(reflect.ValueOf(r))
 		}
-		paramsField, _ := reflect.TypeOf(routeRef.Interface()).FieldByName(paramsTypeName)
+		paramsField, _ := reflect.TypeOf(routeValue.Interface()).FieldByName(paramsTypeName)
 		validateMethod, _ := paramsField.Type.MethodByName("Validate")
 		paramsAndErr := validateMethod.Func.Call([]reflect.Value{paramsValue})
 		err := paramsAndErr[1].Interface()
 		if err != nil {
-			return routeRef.Interface().(T_Route), err.(error)
+			return err.(error)
 		}
 	}
 
-	bodyTypeName := getTypeName(RouteBody[any]{})
-	bodyValue := routeRef.FieldByName(bodyTypeName)
+	bodyTypeName := getTypeName(HasBody[any]{})
+	bodyValue := routeValue.FieldByName(bodyTypeName)
 	if bodyValue.IsValid() {
 		requestValue := bodyValue.FieldByName("Request")
 		if requestValue.CanSet() {
 			requestValue.Set(reflect.ValueOf(r))
 		}
-		bodyField, _ := reflect.TypeOf(routeRef.Interface()).FieldByName(bodyTypeName)
+		bodyField, _ := reflect.TypeOf(routeValue.Interface()).FieldByName(bodyTypeName)
 		validateMethod, _ := bodyField.Type.MethodByName("Validate")
 		bodyAndErr := validateMethod.Func.Call([]reflect.Value{bodyValue})
 		err := bodyAndErr[1].Interface()
 		if err != nil {
-			return routeRef.Interface().(T_Route), err.(error)
+			return err.(error)
 		}
 	}
 
-	responseTypeName := getTypeName(RouteResponse[any]{})
-	responseValue := routeRef.FieldByName(responseTypeName)
+	responseTypeName := getTypeName(HasResponse[any]{})
+	responseValue := routeValue.FieldByName(responseTypeName)
 	if responseValue.IsValid() {
 		responseWriterValue := responseValue.FieldByName("ResponseWriter")
 		if responseWriterValue.CanSet() {
@@ -148,7 +97,7 @@ func newRoute[T_Route any](routeRef reflect.Value, w http.ResponseWriter, r *htt
 		}
 	}
 
-	return routeRef.Interface().(T_Route), nil
+	return nil
 }
 
 func getTypeName(instance any) string {
