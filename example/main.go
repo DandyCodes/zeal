@@ -9,18 +9,18 @@ import (
 	"github.com/DandyCodes/zeal/example/models"
 )
 
-var Mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
+var mux = zeal.NewServeMux(http.NewServeMux(), "Example API")
 
 func main() {
-	addRoutes(Mux)
+	addRoutes(mux)
 
-	openAPISpecOptions := zeal.OpenAPISpecOptions{
-		ZealMux:       Mux,
+	specOptions := zeal.SpecOptions{
+		ServeMux:      mux,
 		Version:       "v0.1.0",
 		Description:   "Example API description.",
 		StripPkgPaths: []string{"main", "models", "github.com/DandyCodes/zeal"},
 	}
-	spec, err := zeal.CreateOpenAPISpec(openAPISpecOptions)
+	openAPISpec, err := zeal.NewOpenAPISpec(specOptions)
 	if err != nil {
 		log.Fatalf("Failed to create OpenAPI spec: %v", err)
 	}
@@ -28,10 +28,10 @@ func main() {
 	port := 3975
 	swaggerPattern := "/swagger-ui/"
 	fmt.Printf("Visit http://localhost:%v%v to see API definitions\n", port, swaggerPattern)
-	zeal.ServeSwaggerUI(Mux, spec, "GET "+swaggerPattern)
+	zeal.ServeSwaggerUI(mux, openAPISpec, "GET "+swaggerPattern)
 
 	fmt.Printf("Listening on port %v...\n", port)
-	http.ListenAndServe(fmt.Sprintf(":%v", port), Mux)
+	http.ListenAndServe(fmt.Sprintf(":%v", port), mux)
 }
 
 var foodMenu = models.Menu{
@@ -52,117 +52,107 @@ var drinksMenu = models.Menu{
 
 var menus = []models.Menu{foodMenu, drinksMenu}
 
-func addRoutes(Mux *zeal.ServeMux) {
-	type PostRoot struct{}
-	var postRoot = zeal.Route[PostRoot](Mux)
+func addRoutes(mux *zeal.ServeMux) {
+	var postRoot = zeal.NewRoute[zeal.Route](mux)
 	postRoot.HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Hello, world!")
-		w.WriteHeader(http.StatusOK)
 	})
-	// Alternatively:
-	// zeal.Route[any](Mux).HandleFunc("POST /", func(w http.ResponseWriter, r *http.Request) {
-	// 	fmt.Println("Hello, world!")
-	// })
 
-	type GetAnswer struct{ zeal.RouteResponse[int] }
-	var getAnswer = zeal.Route[GetAnswer](Mux)
+	type GetAnswer struct {
+		zeal.Route
+		zeal.HasResponse[int]
+	}
+	var getAnswer = zeal.NewRoute[GetAnswer](mux)
 	getAnswer.HandleFunc("GET /answer", func(w http.ResponseWriter, r *http.Request) {
-		getAnswer.Route.Response(42)
+		getAnswer.Response(42)
 	})
 
 	type GetMenus struct {
-		zeal.RouteResponse[[]models.Menu]
+		zeal.Route
+		zeal.HasResponse[[]models.Menu]
 	}
-	var getMenus = zeal.Route[GetMenus](Mux)
+	var getMenus = zeal.NewRoute[GetMenus](mux)
 	getMenus.HandleFunc("GET /menus", func(w http.ResponseWriter, r *http.Request) {
-		getMenus.Route.Response(menus, http.StatusOK)
+		getMenus.Response(menus)
 	})
 
-	type GetMenu struct {
-		zeal.RouteParams[struct {
+	type DeleteMenu struct {
+		zeal.Route
+		zeal.HasParams[struct {
 			ID    int
 			Quiet bool
 		}]
-		zeal.RouteResponse[models.Menu]
 	}
-	var getMenu = zeal.Route[GetMenu](Mux)
-	getMenu.HandleFunc("GET /menus/{ID}", func(w http.ResponseWriter, r *http.Request) {
-		quiet := getMenu.Route.Params().Quiet
-		if !quiet {
-			fmt.Println("Getting menu")
+	var deleteMenu = zeal.NewRoute[DeleteMenu](mux)
+	deleteMenu.HandleFunc("DELETE /menus/{ID}", func(w http.ResponseWriter, r *http.Request) {
+		if !deleteMenu.Params().Quiet {
+			fmt.Println("Deleting menu")
 		}
 
-		ID := getMenu.Route.Params().ID
 		for i := 0; i < len(menus); i++ {
-			menu := menus[i]
-			if menu.ID == ID {
-				getMenu.Route.Response(menu)
+			if menus[i].ID == deleteMenu.Params().ID {
+				menus = append(menus[:i], menus[i+1:]...)
+				w.WriteHeader(http.StatusNoContent)
 				return
 			}
 		}
 
-		getMenu.Error(http.StatusNotFound)
+		w.WriteHeader(http.StatusNotFound)
 	})
 
 	type PutItem struct {
-		zeal.RouteBody[models.Item]
-		zeal.RouteResponse[models.Item]
+		zeal.Route
+		zeal.HasBody[models.Item]
 	}
-	var putItem = zeal.Route[PutItem](Mux)
+	var putItem = zeal.NewRoute[PutItem](mux)
 	putItem.HandleFunc("PUT /items", func(w http.ResponseWriter, r *http.Request) {
-		item := putItem.Route.Body()
+		item := putItem.Body()
 		if item.Price < 0 {
-			putItem.Error(http.StatusBadRequest, "Price cannot be negative")
+			http.Error(w, "Price cannot be negative", http.StatusBadRequest)
 			return
 		}
 
 		for i := range menus {
 			for j := range menus[i].Items {
-				if menus[i].Items[j].Name != item.Name {
-					continue
+				if menus[i].Items[j].Name == item.Name {
+					menus[i].Items[j].Price = item.Price
+					return
 				}
-
-				menus[i].Items[j].Price = item.Price
-				updatedItem := menus[i].Items[j]
-				putItem.Route.Response(updatedItem)
-				return
 			}
 		}
 
-		menus[1].Items = append(menus[1].Items, item)
-		updatedItem := menus[1].Items[len(menus[1].Items)-1]
-		putItem.Route.Response(updatedItem, http.StatusCreated)
+		menus[0].Items = append(menus[0].Items, item)
+		w.WriteHeader(http.StatusCreated)
 	})
 
 	addOuterScopeRoute()
 }
 
 type PostItem struct {
-	zeal.RouteParams[struct{ MenuID int }]
-	zeal.RouteBody[models.Item]
+	zeal.Route
+	zeal.HasParams[struct{ MenuID int }]
+	zeal.HasBody[models.Item]
+	zeal.HasResponse[models.Item]
 }
 
-var postItem = zeal.Route[PostItem](Mux)
+var postItem = zeal.NewRoute[PostItem](mux)
 
 func addOuterScopeRoute() {
-	postItem.HandleErr("POST /items/{MenuID}", HandlePostItem)
+	postItem.HandleFuncErr("POST /items/{MenuID}", HandlePostItem)
 }
 
 func HandlePostItem(w http.ResponseWriter, r *http.Request) error {
-	item := postItem.Route.Body()
+	item := postItem.Body()
 	if item.Price < 0 {
-		return postItem.Error(http.StatusBadRequest, "Price cannot be negative")
+		return zeal.Error(w, "Price cannot be negative", http.StatusBadRequest)
 	}
 
-	MenuID := postItem.Route.Params().MenuID
 	for i := range menus {
-		if menus[i].ID != MenuID {
-			continue
+		if menus[i].ID == postItem.Params().MenuID {
+			menus[i].Items = append(menus[i].Items, item)
+			return postItem.Response(item, http.StatusCreated)
 		}
-
-		menus[i].Items = append(menus[i].Items, item)
-		return postItem.Status(http.StatusCreated)
 	}
 
-	return postItem.Error(http.StatusNotFound)
+	return zeal.WriteHeader(w, http.StatusNotFound)
 }

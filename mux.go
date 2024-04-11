@@ -21,17 +21,17 @@ func NewServeMux(mux *http.ServeMux, apiName ...string) *ServeMux {
 	return &ServeMux{ServeMux: mux, Api: rest.NewAPI(name)}
 }
 
-type OpenAPISpecOptions struct {
-	ZealMux       *ServeMux
+type SpecOptions struct {
+	ServeMux      *ServeMux
 	Version       string
 	Description   string
 	StripPkgPaths []string
 }
 
-func CreateOpenAPISpec(options OpenAPISpecOptions) (*openapi3.T, error) {
-	options.ZealMux.Api.StripPkgPaths = options.StripPkgPaths
+func NewOpenAPISpec(options SpecOptions) (*openapi3.T, error) {
+	options.ServeMux.Api.StripPkgPaths = options.StripPkgPaths
 
-	spec, err := options.ZealMux.Api.Spec()
+	spec, err := options.ServeMux.Api.Spec()
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +74,8 @@ func removeDefaultResponses(operation *openapi3.Operation) {
 	})
 }
 
-func ServeSwaggerUI(mux *ServeMux, spec *openapi3.T, path string) error {
-	ui, err := swaggerui.New(spec)
+func ServeSwaggerUI(mux *ServeMux, openAPISpec *openapi3.T, path string) error {
+	ui, err := swaggerui.New(openAPISpec)
 	if err != nil {
 		return err
 	}

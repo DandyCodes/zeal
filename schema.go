@@ -10,20 +10,20 @@ import (
 	"github.com/a-h/rest"
 )
 
-func registerRoute(mux *ServeMux, pattern string, routeStructField reflect.StructField) {
-	route, err := getRoute(pattern, mux)
+func registerRoute(mux *ServeMux, pattern string, routeType reflect.Type) {
+	route, err := newRoute(pattern, mux)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	if routeStructField.Type.Kind() == reflect.Interface {
+	if routeType.Kind() == reflect.Interface {
 		registerResponse(route, nil)
 		return
 	}
 
-	paramsTypeName := getTypeName(RouteParams[any]{})
-	paramsField, ok := routeStructField.Type.FieldByName(paramsTypeName)
+	paramsTypeName := getTypeName(HasParams[any]{})
+	paramsField, ok := routeType.FieldByName(paramsTypeName)
 	if ok {
 		method, ok := paramsField.Type.MethodByName("Params")
 		if ok {
@@ -33,8 +33,8 @@ func registerRoute(mux *ServeMux, pattern string, routeStructField reflect.Struc
 		}
 	}
 
-	bodyTypeName := getTypeName(RouteBody[any]{})
-	bodyField, ok := routeStructField.Type.FieldByName(bodyTypeName)
+	bodyTypeName := getTypeName(HasBody[any]{})
+	bodyField, ok := routeType.FieldByName(bodyTypeName)
 	if ok {
 		method, ok := bodyField.Type.MethodByName("Body")
 		if ok {
@@ -42,8 +42,8 @@ func registerRoute(mux *ServeMux, pattern string, routeStructField reflect.Struc
 		}
 	}
 
-	responseTypeName := getTypeName(RouteResponse[any]{})
-	responseField, ok := routeStructField.Type.FieldByName(responseTypeName)
+	responseTypeName := getTypeName(HasResponse[any]{})
+	responseField, ok := routeType.FieldByName(responseTypeName)
 	if ok {
 		method, ok := responseField.Type.MethodByName("Response")
 		if ok {
@@ -54,7 +54,7 @@ func registerRoute(mux *ServeMux, pattern string, routeStructField reflect.Struc
 	}
 }
 
-func getRoute(pattern string, mux *ServeMux) (*rest.Route, error) {
+func newRoute(pattern string, mux *ServeMux) (*rest.Route, error) {
 	method, path, found := strings.Cut(pattern, " ")
 	if !found {
 		return nil, fmt.Errorf("expected URL pattern with HTTP method, received: %v", pattern)
