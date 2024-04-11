@@ -93,7 +93,7 @@ The ***Response*** method will only accept data of the declared response type.
 
 ---
 
-The ***zeal.Response*** can be defined with complex types.
+Type parameters passed to ***zeal.HasResponse*** can be more complex.
 
 Here is some example data:
 
