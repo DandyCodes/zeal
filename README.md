@@ -254,6 +254,40 @@ The ***Response*** method can be passed an optional HTTP status code (200 OK is 
 
 The ***zeal.WriteHeader*** function returns a nil error after calling ***http.ResponseWriter.WriteHeader*** with a given HTTP status code.
 
+## Nested Handlers
+
+Use ***zeal.ZealMux.Handle*** to preserve route documentation of sub handlers, using ***zeal.StripPrefix*** if necessary:
+
+```go
+topMux := zeal.NewZealMux(http.NewServeMux(), "Example API")
+subMux := zeal.NewZealMux(http.NewServeMux())
+addRoutes(subMux)
+topMux.Handle("/sub_api/", zeal.StripPrefix("/sub_api", subMux))
+```
+
+And use the top ***zeal.ZealMux*** to create the OpenAPI spec and listen and serve:
+
+```go
+specOptions := zeal.SpecOptions{
+    ZealMux:       topMux,
+    Version:       "v0.1.0",
+    Description:   "Example API description.",
+    StripPkgPaths: []string{"main", "models", "github.com/DandyCodes/zeal"},
+}
+openAPISpec, err := zeal.NewOpenAPISpec(specOptions)
+if err != nil {
+    log.Fatalf("Failed to create OpenAPI spec: %v", err)
+}
+
+port := 3975
+swaggerPattern := "/swagger-ui/"
+fmt.Printf("Visit http://localhost:%v%v to see API definitions\n", port, swaggerPattern)
+zeal.ServeSwaggerUI(topMux, openAPISpec, "GET "+swaggerPattern)
+
+fmt.Printf("Listening on port %v...\n", port)
+http.ListenAndServe(fmt.Sprintf(":%v", port), topMux)
+```
+
 ## Credits
 
 <a href="https://www.flaticon.com/free-icons/helmet" title="helmet icons">Helmet icons created by Freepik - Flaticon</a>

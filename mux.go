@@ -2,6 +2,7 @@ package zeal
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/a-h/rest"
 	"github.com/a-h/rest/swaggerui"
@@ -83,4 +84,42 @@ func ServeSwaggerUI(mux *ZealMux, openAPISpec *openapi3.T, path string) error {
 	mux.Handle(path, ui)
 
 	return nil
+}
+
+func StripPrefix(prefix string, h *ZealMux) *ZealMux {
+	h.Handle("/", http.StripPrefix(prefix, h))
+	return h
+}
+
+func (m *ZealMux) Handle(pattern string, handler http.Handler) {
+	switch sHandler := handler.(type) {
+	case *ZealMux:
+		for _, methodToRoute := range sHandler.Api.Routes {
+			for _, route := range methodToRoute {
+				mergeRoute(strings.TrimSuffix(pattern, "/"), m.Api, route)
+			}
+		}
+		m.ServeMux.Handle(pattern, sHandler)
+	default:
+		m.ServeMux.Handle(pattern, sHandler)
+	}
+}
+
+func mergeRoute(prefix string, api *rest.API, r *rest.Route) {
+	toUpdate := api.Route(string(r.Method), prefix+string(r.Pattern))
+	mergeMap(toUpdate.Params.Path, r.Params.Path)
+	mergeMap(toUpdate.Params.Query, r.Params.Query)
+	if toUpdate.Models.Request.Type == nil {
+		toUpdate.Models.Request = r.Models.Request
+	}
+	mergeMap(toUpdate.Models.Responses, r.Models.Responses)
+}
+
+func mergeMap[TKey comparable, TValue any](into, from map[TKey]TValue) {
+	for kf, vf := range from {
+		_, ok := into[kf]
+		if !ok {
+			into[kf] = vf
+		}
+	}
 }
