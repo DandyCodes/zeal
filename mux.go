@@ -65,13 +65,13 @@ func prepareForConsumption(operation *openapi3.Operation) {
 	if operation == nil {
 		return
 	}
-	removeDefaultResponses(operation.Responses)
-	requireRequestBody(operation.RequestBody)
+	removeDefaultResponses(operation)
+	requireRequestBody(operation)
 }
 
-func removeDefaultResponses(responses *openapi3.Responses) {
-	responses = openapi3.NewResponses(func(newResponses *openapi3.Responses) {
-		for code, response := range responses.Map() {
+func removeDefaultResponses(operation *openapi3.Operation) {
+	operation.Responses = openapi3.NewResponses(func(newResponses *openapi3.Responses) {
+		for code, response := range operation.Responses.Map() {
 			if code == "default" {
 				continue
 			}
@@ -80,11 +80,11 @@ func removeDefaultResponses(responses *openapi3.Responses) {
 	})
 }
 
-func requireRequestBody(body *openapi3.RequestBodyRef) {
-	if body == nil || body.Value == nil {
+func requireRequestBody(operation *openapi3.Operation) {
+	if operation.RequestBody == nil || operation.RequestBody.Value == nil {
 		return
 	}
-	body.Value.Required = true
+	operation.RequestBody.Value.Required = true
 }
 
 func ServeSwaggerUI(mux *ZealMux, openAPISpec *openapi3.T, path string) error {
