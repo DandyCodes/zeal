@@ -47,32 +47,44 @@ func NewOpenAPISpec(options SpecOptions) (*openapi3.T, error) {
 	}
 
 	for _, path := range spec.Paths.Map() {
-		removeDefaultResponses(path.Connect)
-		removeDefaultResponses(path.Delete)
-		removeDefaultResponses(path.Get)
-		removeDefaultResponses(path.Head)
-		removeDefaultResponses(path.Options)
-		removeDefaultResponses(path.Patch)
-		removeDefaultResponses(path.Post)
-		removeDefaultResponses(path.Put)
-		removeDefaultResponses(path.Trace)
+		prepareForConsumption(path.Connect)
+		prepareForConsumption(path.Delete)
+		prepareForConsumption(path.Get)
+		prepareForConsumption(path.Head)
+		prepareForConsumption(path.Options)
+		prepareForConsumption(path.Patch)
+		prepareForConsumption(path.Post)
+		prepareForConsumption(path.Put)
+		prepareForConsumption(path.Trace)
 	}
 
 	return spec, nil
 }
 
-func removeDefaultResponses(operation *openapi3.Operation) {
+func prepareForConsumption(operation *openapi3.Operation) {
 	if operation == nil {
 		return
 	}
-	operation.Responses = openapi3.NewResponses(func(responses *openapi3.Responses) {
-		for code, response := range operation.Responses.Map() {
+	removeDefaultResponses(operation.Responses)
+	requireRequestBody(operation.RequestBody)
+}
+
+func removeDefaultResponses(responses *openapi3.Responses) {
+	responses = openapi3.NewResponses(func(newResponses *openapi3.Responses) {
+		for code, response := range responses.Map() {
 			if code == "default" {
 				continue
 			}
-			responses.Set(code, response)
+			newResponses.Set(code, response)
 		}
 	})
+}
+
+func requireRequestBody(body *openapi3.RequestBodyRef) {
+	if body == nil || body.Value == nil {
+		return
+	}
+	body.Value.Required = true
 }
 
 func ServeSwaggerUI(mux *ZealMux, openAPISpec *openapi3.T, path string) error {
