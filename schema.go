@@ -42,7 +42,7 @@ func registerRoute(mux *ZealMux, pattern string, routeType reflect.Value) {
 	responseField := routeType.FieldByName(responseTypeName)
 	if responseField.IsValid() {
 		method := responseField.Addr().MethodByName("Response")
-		registerResponse(route, method.Type().In(1))
+		registerResponse(route, method.Type().In(0))
 	} else {
 		registerResponse(route, nil)
 	}
