@@ -45,13 +45,13 @@ func main() {
 
 ## Routes
 
-Create your route by calling ***zeal.NewRoute***, passing it a ***zeal.ZealMux***:
+Create your route by calling ***zeal.NewRoute()***, passing it a ***zeal.ZealMux***:
 
 ```go
 var route = zeal.NewRoute[zeal.Route](mux)
 ```
 
-Passing the basic ***zeal.Route*** as a type parameter to ***zeal.NewRoute*** means this route has no:
+Passing the basic ***zeal.Route*** as a type parameter to ***zeal.NewRoute()*** means this route has no:
 
 * Response type
 * URL parameters
@@ -89,7 +89,7 @@ getAnswer.HandleFunc("GET /answer", func(w http.ResponseWriter, r *http.Request)
 })
 ```
 
-The ***Response*** method will only accept data of the declared response type.
+The ***Response()*** method will only accept data of the declared response type.
 
 ---
 
@@ -168,7 +168,7 @@ Params found in the URL pattern (for example, 'ID' in '/menus/{ID}') will be def
 
 Params are converted to their declared type. If this fails, http.StatusUnprocessableEntity 422 is sent immediately.
 
-Struct fields must be capitalized to be accessed in the route - for example, 'Quiet'.
+Struct fields must be capitalized to be accessed in the handler function - for example, 'Quiet'.
 
 ## Request Bodies
 
@@ -207,11 +207,11 @@ putItem.HandleFunc("PUT /items", func(w http.ResponseWriter, r *http.Request) {
 
 The body is converted to its declared type. If this fails, http.StatusUnprocessableEntity 422 is sent immediately.
 
-Struct fields must be capitalized to be accessed in the route - for example, 'Price'.
+Struct fields must be capitalized to be accessed in the handler function - for example, 'Price'.
 
 ## Error Handling
 
-Use the ***HandleFuncErr*** method to create a handler function which returns an error.
+Use the ***HandleFuncErr()*** method to create a handler function which returns an error.
 
 Route handler functions can be defined in an outer scope:
 
@@ -248,15 +248,15 @@ func HandlePostItem(w http.ResponseWriter, r *http.Request) error {
 }
 ```
 
-The ***zeal.Error*** function returns a nil error after calling ***http.Error*** with a given error message and HTTP status code.
+The ***zeal.Error()*** function returns a nil error after calling ***http.Error()*** with a given error message and HTTP status code.
 
-The ***Response*** method can be passed an optional HTTP status code (200 OK is sent by default). It returns a nil error if successful. Otherwise, it returns the JSON serialization error after calling ***http.Error*** with ***http.StatusInternalServerError***.
+The ***Response()*** method can be passed an optional HTTP status code (200 OK is sent by default). It returns a nil error if successful. Otherwise, it returns the JSON serialization error after calling ***http.Error()*** with ***http.StatusInternalServerError***.
 
-The ***zeal.WriteHeader*** function returns a nil error after calling ***http.ResponseWriter.WriteHeader*** with a given HTTP status code.
+The ***zeal.WriteHeader()*** function returns a nil error after calling ***http.ResponseWriter.WriteHeader()*** with a given HTTP status code.
 
 ## Nested Handlers
 
-Use ***zeal.ZealMux.Handle*** to preserve route documentation of sub handlers, using ***zeal.StripPrefix*** if necessary:
+Use ***zeal.ZealMux.Handle()*** to preserve route documentation of sub handlers, using ***zeal.StripPrefix()*** if necessary:
 
 ```go
 topMux := zeal.NewZealMux(http.NewServeMux(), "Example API")
