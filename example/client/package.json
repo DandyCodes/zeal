@@ -11,8 +11,8 @@
     "api_cli": "openapi-ts -i http://localhost:3975/swagger-ui/swagger.json -o src/api"
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "^0.38.1",
-    "typescript": "^5.2.2",
-    "vite": "^5.2.0"
+    "@hey-api/openapi-ts": "^0.56.3",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
   }
 }
