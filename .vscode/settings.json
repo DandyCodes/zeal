@@ -1,13 +1,17 @@
 {
     "go.inlayHints.assignVariableTypes": true,
-    "go.inlayHints.compositeLiteralFields": true,
     // "go.inlayHints.compositeLiteralTypes": true,
-    "go.inlayHints.constantValues": true,
     // "go.inlayHints.functionTypeParameters": true,
     // "go.inlayHints.parameterNames": true,
+    "go.inlayHints.compositeLiteralFields": true,
+    "go.inlayHints.constantValues": true,
     "go.inlayHints.rangeVariableTypes": true,
     "go.toolsManagement.autoUpdate": true,
     "gopls": {
         "ui.semanticTokens": true
     },
+    "go.toolsEnvVars": {
+        "GOEXPERIMENT": "aliastypeparams",
+        "GODEBUG": "gotypesalias=1"
+    }
 }

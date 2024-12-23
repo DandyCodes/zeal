@@ -2,10 +2,6 @@ import { OpenAPI, DefaultService } from "./api";
 
 OpenAPI.BASE = "/api"
 
-// #############################################################
-// npm run dev, navigate to client url and check browser console
-// #############################################################
-
 await DefaultService.postHello()
 
 const answer = await DefaultService.getAnswer()
